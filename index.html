@@ -1,0 +1,778 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>呼吸器専門医試験対策 フラッシュカード</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', 'Noto Sans JP', sans-serif;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+        .flashcard-container { perspective: 1000px; }
+        .flashcard { width: 100%; height: 100%; position: relative; transform-style: preserve-3d; transition: transform 0.6s; }
+        .flashcard.is-flipped { transform: rotateY(180deg); }
+        .flashcard-face { position: absolute; width: 100%; height: 100%; backface-visibility: hidden; -webkit-backface-visibility: hidden; display: flex; flex-direction: column; justify-content: center; align-items: center; overflow-y: auto; }
+        .flashcard-back { transform: rotateY(180deg); }
+        .flashcard-face::-webkit-scrollbar { width: 8px; }
+        .flashcard-face::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 10px; }
+        .flashcard-face::-webkit-scrollbar-thumb { background: #888; border-radius: 10px; }
+        .flashcard-face::-webkit-scrollbar-thumb:hover { background: #555; }
+        .category-btn.active { background-color: #3b82f6; color: white; font-weight: 600; }
+        #weakness-btn.active svg { fill: #facc15; color: #facc15; }
+        .modal { display: none; }
+        .modal.is-open { display: flex; }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800">
+
+    <div class="container mx-auto p-4 md:p-8 max-w-4xl">
+        <header class="text-center mb-6">
+            <h1 class="text-2xl md:text-3xl font-bold text-gray-700">【Firebase対応】呼吸器専門医試験対策</h1>
+            <p id="total-questions-display" class="text-gray-500 mt-1">データベースに接続中...</p>
+        </header>
+
+        <div class="bg-white p-4 rounded-xl shadow-md mb-6">
+            <div class="mb-4">
+                <input type="text" id="search" placeholder="キーワードで問題を検索..." class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition" disabled>
+            </div>
+            <div>
+                <h3 class="text-sm font-semibold mb-2 text-gray-600">カテゴリで絞り込み:</h3>
+                <div id="category-filters" class="flex flex-wrap gap-2"></div>
+            </div>
+        </div>
+
+        <main class="mb-6">
+            <div class="flex justify-between items-center mb-4">
+                <div id="progress" class="text-lg font-semibold text-gray-600">問題 0 / 0</div>
+                <button id="weakness-btn" class="text-gray-400 hover:text-yellow-400 transition-colors text-2xl" title="苦手リストに追加/削除">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"></path></svg>
+                </button>
+            </div>
+            <div class="flashcard-container h-80 md:h-96">
+                <div id="flashcard" class="flashcard">
+                    <div id="card-front" class="flashcard-face bg-white rounded-xl shadow-lg p-6 border-2 border-blue-200"></div>
+                    <div id="card-back" class="flashcard-face flashcard-back bg-blue-50 rounded-xl shadow-lg p-6 border-2 border-blue-300"></div>
+                </div>
+            </div>
+        </main>
+
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+            <button id="prev-btn" class="w-full bg-white text-blue-600 font-semibold py-3 px-4 rounded-lg shadow hover:bg-gray-50 transition-colors border border-gray-200">前の問題</button>
+            <button id="random-btn" class="w-full bg-white text-blue-600 font-semibold py-3 px-4 rounded-lg shadow hover:bg-gray-50 transition-colors border border-gray-200">ランダム</button>
+            <button id="flip-btn" class="w-full bg-blue-500 text-white font-semibold py-3 px-4 rounded-lg shadow hover:bg-blue-600 transition-colors col-span-2 md:col-span-1">答えを見る</button>
+            <button id="next-btn" class="w-full bg-blue-500 text-white font-semibold py-3 px-4 rounded-lg shadow hover:bg-blue-600 transition-colors col-span-2 md:col-span-1">次の問題</button>
+        </div>
+
+        <div class="bg-white p-4 rounded-xl shadow-md">
+            <h3 class="text-lg font-bold text-gray-700 mb-4 text-center">問題の管理</h3>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <button id="add-btn" class="w-full bg-green-500 text-white font-semibold py-3 px-4 rounded-lg shadow hover:bg-green-600 transition-colors" disabled>新しい問題を追加</button>
+                <button id="edit-btn" class="w-full bg-yellow-500 text-white font-semibold py-3 px-4 rounded-lg shadow hover:bg-yellow-600 transition-colors" disabled>この問題を修正</button>
+                <button id="delete-btn" class="w-full bg-red-500 text-white font-semibold py-3 px-4 rounded-lg shadow hover:bg-red-600 transition-colors" disabled>この問題を削除</button>
+                <button id="export-btn" class="w-full bg-purple-500 text-white font-semibold py-3 px-4 rounded-lg shadow hover:bg-purple-600 transition-colors" disabled>HTMLをエクスポート</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="edit-modal" class="modal fixed inset-0 bg-black bg-opacity-50 items-center justify-center p-4 z-50">
+        <div class="bg-white rounded-xl shadow-2xl p-6 w-full max-w-lg">
+            <h2 id="modal-title" class="text-2xl font-bold mb-4"></h2>
+            <form id="edit-form">
+                <input type="hidden" id="modal-question-id" value="">
+                <div class="mb-4">
+                    <label for="modal-question" class="block text-sm font-medium text-gray-700 mb-1">問題文</label>
+                    <textarea id="modal-question" rows="4" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" required></textarea>
+                </div>
+                <div class="mb-4">
+                    <label for="modal-answer" class="block text-sm font-medium text-gray-700 mb-1">答えと解説 (HTMLタグが使えます)</label>
+                    <textarea id="modal-answer" rows="6" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" required></textarea>
+                </div>
+                <div class="mb-6">
+                    <label for="modal-category" class="block text-sm font-medium text-gray-700 mb-1">カテゴリ</label>
+                    <select id="modal-category" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" required></select>
+                </div>
+                <div class="flex justify-end gap-4">
+                    <button type="button" id="modal-cancel-btn" class="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300">キャンセル</button>
+                    <button type="submit" id="modal-save-btn" class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600">保存</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script type="module">
+             // Firebase SDKのインポート
+        // ★★★このURL形式のimport文が、このHTMLファイルでは正しい書き方です★★★
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+        import { getFirestore, collection, onSnapshot, doc, addDoc, updateDoc, deleteDoc, getDocs, writeBatch } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+        // ▼▼▼▼▼ Firebaseコンソールからコピーするのは、このfirebaseConfigの中身だけです ▼▼▼▼▼
+        const firebaseConfig = {
+          apiKey: "AIzaSyDkaIgO-EzjjRteHNefpNOJDWBgkVvDf5Y",
+          authDomain: "flashcard-54f81.firebaseapp.com",
+          projectId: "flashcard-54f81",
+          storageBucket: "flashcard-54f81.firebasestorage.app",
+          messagingSenderId: "120004007269",
+          appId: "1:120004007269:web:3c8d5209ce33a1cb23bd8c",
+          measurementId: "G-F1Y6RVYRDF"
+        };
+        // ▲▲▲▲▲ ここまで ▲▲▲▲▲
+
+        // Firebaseの初期化
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const questionsCollection = collection(db, 'questions');
+        
+        const initialQuestions = [
+            { "id": 1, "category": 1, "question": "気管支と細気管支を組織学的に鑑別する最も重要な構造物は何か？", "answer": "<strong>答え:</strong> 軟骨<br><strong>解説:</strong> 気管支には軟骨が敷石状に存在しますが、細気管支には軟骨が存在しません。" },
+            { "id": 2, "category": 1, "question": "細気管支において、杯細胞に代わって見られる分泌細胞は何か？", "answer": "<strong>答え:</strong> クララ細胞（クラブ細胞）<br><strong>解説:</strong> 細気管支では粘液を産生する杯細胞がなくなり、サーファクタントの成分などを分泌するクララ細胞に置き換わります。" },
+            { "id": 3, "category": 1, "question": "右気管支動脈の最も多い起始はどこか？", "answer": "<strong>答え:</strong> 肋間動脈<br><strong>解説:</strong> 右気管支動脈は肋間動脈から、左気管支動脈は胸部大動脈から起始することが最も多いとされています。" },
+            { "id": 4, "category": 1, "question": "横隔膜にある3つの裂孔は何か？", "answer": "<strong>答え:</strong> 大動脈裂孔、大静脈孔、食道裂孔" },
+            { "id": 5, "category": 1, "question": "最も頻度の高い先天性横隔膜ヘルニアは何か？また、どちら側に多いか？", "answer": "<strong>答え:</strong> Bochdalek孔ヘルニア、左側<br><strong>解説:</strong> 横隔膜の後外側部にあるBochdalek孔から腹腔内臓器が脱出するもので、新生児期に発見されることが多いです。" },
+            { "id": 6, "category": 1, "question": "肺の発生段階において、肺サーファクタントの産生が開始されるのはどの時期か？", "answer": "<strong>答え:</strong> 細管期 (在胎16〜28週)<br><strong>解説:</strong> 細管期にサーファクタント産生が始まり、囊状期(28週〜)の後期に産生が完了し、胎外生活が可能になります。" },
+            { "id": 7, "category": 1, "question": "NSAIDsの投与でアスピリン喘息が誘発されるメカニズムは？", "answer": "<strong>答え:</strong> COX経路が阻害され、LOX経路でのロイコトリエン(LTs)産生が亢進するため。<br><strong>解説:</strong> アラキドン酸カスケードにおいて、COX経路がブロックされることで、気管支収縮作用の強いロイコトリエンへの代謝が優位になることが原因です。" },
+            { "id": 8, "category": 1, "question": "呼吸の化学調節において、主にPaCO2の上昇を感知する受容体はどこにあるか？", "answer": "<strong>答え:</strong> 延髄腹側 (中枢化学受容体)<br><strong>解説:</strong> 中枢化学受容体は脳脊髄液中のCO2濃度（pHの低下）に感受性を持ち、換気を促進します。 一方、末梢化学受容体（頸動脈小体など）は主にO2低下を感知します。" },
+            { "id": 9, "category": 1, "question": "ACE阻害薬による空咳のメカニズムは？", "answer": "<strong>答え:</strong> ブラジキニンの分解が阻害され、蓄積するため。<br><strong>解説:</strong> ACEはブラジキニンを分解する作用も持ちます。ACE阻害薬によりブラジキニンが蓄積すると、C線維が刺激されて咳が誘発されます。" },
+            { "id": 10, "category": 1, "question": "酸素解離曲線が右方移動する（ヘモグロビンが酸素を解離しやすくなる）要因を4つ挙げよ。", "answer": "<strong>答え:</strong> ①アシドーシス(pH低下)、②CO2上昇、③体温上昇、④2,3-DPG増加<br><strong>解説:</strong> 「右へGO! 足(アシドーシス)アツ(熱・CO2)アツの2,3歩」と覚えます。 これらは組織での代謝が亢進している状態を示し、酸素を組織に供給しやすくする合目的な反応です。" },
+            { "id": 11, "category": 1, "question": "加齢に伴う呼吸機能の変化として、全肺気量(TLC)はどうなるか？", "answer": "<strong>答え:</strong> 維持される。<br><strong>解説:</strong> 加齢により肺の弾性収縮力は低下し残気量は増加しますが、胸郭のコンプライアンスも低下するため、結果的にTLCはほぼ変化しません。" },
+            { "id": 12, "category": 1, "question": "日本におけるがんの部位別死亡数で、男女ともに第1位のものは何か？ (2023年)", "answer": "<strong>答え:</strong> 肺癌<br><strong>解説:</strong> 肺癌は罹患数では第3位ですが、死亡数は最も多いがんです。" },
+            { "id": 13, "category": 1, "question": "気管支腺の神経支配について、アドレナリンβ受容体が多く分布するのは漿液腺・粘液腺のどちらか？", "answer": "<strong>答え:</strong> 粘液腺<br><strong>解説:</strong> 漿液腺にはα受容体、粘液腺にはβ受容体が多く分布しています。このため、喘息治療でβ刺激薬を過剰に用いると、粘稠な気道分泌物が増加する可能性があります。" },
+            { "id": 14, "category": 1, "question": "肺血管内皮細胞が産生・代謝する物質について、ACEによる変換、不活化、分解されるものをそれぞれ挙げよ。", "answer": "<strong>答え:</strong> 【変換】アンジオテンシンI → II<br>【不活化】ブラジキニン<br>【分解】セロトニン、ノルアドレナリン" },
+            { "id": 15, "category": 1, "question": "睡眠中は、換気応答が低下するが、特にどちらへの応答がより低下するか？ (O2低下 or CO2上昇)", "answer": "<strong>答え:</strong> CO2上昇への応答<br><strong>解説:</strong> 睡眠時は覚醒時と比較して、低酸素・高二酸化炭素血症の両方に対する換気応答が低下しますが、特にCO2に対する感受性の低下が顕著です。" },
+            { "id": 16, "category": 1, "question": "世界の死因ランキングで、虚血性心疾患、脳卒中に次いで第3位の疾患は何か？", "answer": "<strong>答え:</strong> 慢性閉塞性肺疾患(COPD)<br><strong>解説:</strong> COPDは全世界で約320万人の死因となっており、公衆衛生上きわめて重要な疾患です。" },
+            { "id": 17, "category": 1, "question": "横隔神経は、肺門部の前方・後方のどちらを走行するか？", "answer": "<strong>答え:</strong> 前方<br><strong>解説:</strong> 横隔神経は鎖骨下動静脈の間を下り、肺門部の前方を通って横隔膜に到達します。この走行は、手術の際に神経を温存するために重要な解剖学的知識です。" },
+            { "id": 18, "category": 1, "question": "アラキドン酸カスケードにおいて、気道平滑筋弛緩作用と気道粘液分泌抑制作用を持つプロスタグランジンは何か？", "answer": "<strong>答え:</strong> PGE2<br><strong>解説:</strong> PGE2は気管支拡張方向に働く数少ないメディエーターです。一方で、PGD2やTXA2、ロイコトリエンなどは気管支収縮に働きます。" },
+            { "id": 19, "category": 1, "question": "加齢により、圧容量曲線はどのようにシフトするか？", "answer": "<strong>答え:</strong> 左上方にシフトする<br><strong>解説:</strong> 加齢により肺の弾性収縮力が低下するため、より低い圧で肺が拡張しやすくなります。これはCOPDと同様の変化です。" },
+            { "id": 20, "category": 1, "question": "日本の成人喫煙率と、若年層における加熱式たばこの使用割合は？", "answer": "<strong>答え:</strong> 成人喫煙率：約16%（男性27%、女性7%）<br>加熱式たばこの割合：20-30代では30-50%<br><strong>解説:</strong> 全体の喫煙率は減少傾向ですが、若年層では加熱式たばこの使用が広がっているという特徴があります。" },
+            { "id": 21, "category": 1, "question": "外国籍の若年層において、新規に発症する結核が占める割合は？", "answer": "<strong>答え:</strong> 50%以上<br><strong>解説:</strong> 日本全体の結核罹患率は低下していますが、若年層に限ると外国生まれの患者の割合が高く、グローバルな視点での対策が重要です。" },
+            { "id": 22, "category": 1, "question": "気管支動脈を流れる血液量は、心拍出量の約何%を占めるか？", "answer": "<strong>答え:</strong> 約1%<br><strong>解説:</strong> 全身循環の一部でありながら、その血流量はごくわずかです。しかし、高圧系であるため、破綻すると大量喀血の原因となります。" },
+            { "id": 23, "category": 1, "question": "横隔膜の前方、胸骨の後ろにある欠損孔からヘルニアが起こるものを何というか？また、どちら側に多いか？", "answer": "<strong>答え:</strong> Morgagni孔ヘルニア、右側に多い<br><strong>解説:</strong> 最も頻度の高いBochdalek孔ヘルニアが後外側・左側に多いのに対し、Morgagni孔ヘルニアは前方・右側に多いという対比で覚えることが重要です。" },
+            { "id": 24, "category": 1, "question": "アラキドン酸からプロスタグランジン(PGs)やトロンボキサン(TXA2)が産生される際、直接の前駆体となる物質は何か？", "answer": "<strong>答え:</strong> PGH2<br><strong>解説:</strong> COXによってアラキドン酸からPGG2、そしてPGH2が作られます。このPGH2から、各組織の酵素によって気管支収縮に働くTXA2や、逆に弛緩に働くPGE2などが作られるため、同じ経路から相反する作用の物質が生まれます。" },
+            { "id": 25, "category": 1, "question": "加齢により、肺内の交通路であるKohn孔はどう変化するか？", "answer": "<strong>答え:</strong> 増加する<br><strong>解説:</strong> Kohn孔は肺胞間の連絡路です。加齢による増加は、感染の拡大経路になる一方で、閉塞性変化がある場合に側副換気路として機能する側面もあります。" },
+            { "id": 26, "category": 1, "question": "2023年時点での日本の肺癌による年間死亡者数は約何人か？", "answer": "<strong>答え:</strong> 約7万5000人（男性5万人、女性2.5万人）<br><strong>解説:</strong> がん死亡数の中で最多であり、具体的な数字を把握しておくことも重要です。" },
+            { "id": 27, "category": 1, "question": "正常な気道の1日の分泌物量はおよそどのくらいか？", "answer": "<strong>答え:</strong> 10～100ml<br><strong>解説:</strong> この分泌物は線毛運動によって咽頭まで運ばれ、無意識に嚥下されています。この粘液線毛輸送機能は気道の重要な防御機構です。" },
+            { "id": 28, "category": 1, "question": "肺胞の平均的な大きさはどのくらいか？", "answer": "<strong>答え:</strong> 0.2mm<br><strong>解説:</strong> この微細な構造が、合計するとテニスコート半面分もの広大なガス交換面積を生み出しています。" },
+            { "id": 29, "category": 1, "question": "肺の発生において、基本的な気管支分岐が形成されるのはどの時期か？", "answer": "<strong>答え:</strong> 偽腺管期（在胎6～16週）<br><strong>解説:</strong> 「肺芽の発生（胚芽期）」→「気管支分岐の形成（偽腺管期）」→「サーファクタント産生開始（細管期）」という流れを把握することが重要です。" },
+            { "id": 30, "category": 1, "question": "加齢により、PaO2とPaCO2はそれぞれどのように変化する傾向があるか？", "answer": "<strong>答え:</strong> PaO2は低下し、PaCO2は保たれる<br><strong>解説:</strong> 換気血流比の不均等が悪化するため、酸素化は低下しやすくなります。しかし、CO2は拡散能が高く、換気応答も保たれるため、PaCO2は正常範囲内に維持されることが多いです。" },
+            { "id": 31, "category": 1, "question": "日本の医療従事者における潜在性結核感染症(LTBI)の割合はどの程度か？", "answer": "<strong>答え:</strong> 約25%<br><strong>解説:</strong> 一般人口よりも高い割合であり、医療従事者が結核菌に曝露されるリスクを持つことを示しています。" },
+            { "id": 32, "category": 1, "question": "気管支壁の粘膜を構成する上皮細胞は何か？", "answer": "<strong>答え:</strong> 多列線毛円柱上皮と少数の杯細胞<br><strong>解説:</strong> 内腔側は多数の線毛を持つ上皮細胞で覆われ、異物を排出する役割を担っています。杯細胞は粘液を分泌します。" },
+            { "id": 33, "category": 1, "question": "片側性の横隔膜弛緩症が全体に及ぶ場合、左右どちら側に多いか？", "answer": "<strong>答え:</strong> 左側<br><strong>解説:</strong> 横隔膜の筋層が菲薄化する疾患で、多くは先天性です。片側全体が挙上する場合、左側の挙上が多いとされています。" },
+            { "id": 34, "category": 1, "question": "アラキドン酸カスケードにおいて、COX/LOX経路とは別に、CYP450によって代謝される経路で産生される物質群は何か？", "answer": "<strong>答え:</strong> EETs (エポキシエイコサトリエン酸)、HETEs (ヒドロキシエイコサテトラエン酸)<br><strong>解説:</strong> これらは血管拡張や抗炎症作用など多様な生理活性を持つとされ、COX/LOX経路とは異なる第3の経路として研究されています。" },
+            { "id": 35, "category": 1, "question": "喘息の病態に関わるサイトカインCCL5の別名は何か？", "answer": "<strong>答え:</strong> RANTES<br><strong>解説:</strong> RANTES (Regulated on Activation, Normal T cell Expressed and Secreted) は、特に好酸球やTリンパ球を気道に強力に遊走させるケモカインであり、アレルギー性炎症の中心的役割を担います。" },
+            { "id": 36, "category": 1, "question": "気管支壁の構造について、軟骨が存在せず、豊富な弾性線維と平滑筋で構造を保持している気道の部位はどこか？", "answer": "<strong>答え:</strong> 細気管支<br><strong>解説:</strong> 気管支(Bronchus)までは軟骨が存在しますが、細気管支(Bronchiole)では軟骨が消失し、代わりに平滑筋や弾性線維がその構造を支えるようになります。" },
+            { "id": 37, "category": 1, "question": "症状のない横隔膜弛緩症に対する基本的な治療方針は何か？", "answer": "<strong>答え:</strong> 経過観察<br><strong>解説:</strong> 横隔膜弛緩症は、筋層の菲薄化により横隔膜が挙上する状態ですが、呼吸困難などの症状がなければ、特に治療を要さず経過を見ることが一般的です。" },
+            { "id": 38, "category": 1, "question": "アラキドン酸のLOX（リポキシゲナーゼ）経路において、HETEsが生成される前の中間代謝産物は何か？", "answer": "<strong>答え:</strong> HPETEs（ヒドロペルオキシエイコサテトラエン酸）<br><strong>解説:</strong> アラキドン酸 → (LOX) → HPETEs → (ペルオキシダーゼ) → HETEs という順で代謝が進みます。HPETEsは不安定な中間体です。" },
+            { "id": 39, "category": 1, "question": "貧血と多血症、チアノーゼが出現しやすいのはどちらの病態か？また、その理由は？", "answer": "<strong>答え:</strong> 多血症で出現しやすい。<br><strong>解説:</strong> チアノーゼは、血中の「還元型ヘモグロビンの絶対値」が5g/dL以上で出現します。ヘモグロビン総量が多い多血症では、少しの酸素飽和度低下でもこの絶対値に達しやすいためです。" },
+            { "id": 40, "category": 1, "question": "気管支から細気管支へ移行するにつれて、気道の上皮はどのように変化するか？", "answer": "<strong>答え:</strong> 多列線毛円柱上皮から、背の低い単層の円柱線毛上皮へと変化する。<br><strong>解説:</strong> 気道が末梢にいくにつれて、構造がシンプルになっていきます。これと同時に、軟骨や気管支腺も消失します。" },
+            { "id": 41, "category": 1, "question": "肺癌の年間罹患数は約何人で、男女別の内訳は？", "answer": "<strong>答え:</strong> 約12万人で、男性が8万人、女性が4万人です 。" },
+            { "id": 42, "category": 1, "question": "がんの罹患数において、肺癌は何位か？", "answer": "<strong>答え:</strong> 第3位です 。" },
+            { "id": 43, "category": 1, "question": "2023年の日本の死因ランキングについて、1位から5位までを挙げよ。", "answer": "<strong>答え:</strong> 1位: 悪性新生物（がん）, 2位: 心疾患, 3位: 老衰, 4位: 脳血管疾患, 5位: 肺炎" },
+            { "id": 44, "category": 1, "question": "2023年の日本の死因ランキングにおいて、COPDは何位で、死亡者数は約何人か？", "answer": "<strong>答え:</strong> 10位で、約17,000人です。" },
+            { "id": 45, "category": 2, "question": "喀血の9割以上を占める原因血管は何か？", "answer": "<strong>答え:</strong> 気管支動脈<br><strong>解説:</strong> 肺動脈からの出血は稀で、ほとんどが高圧系である気管支動脈に由来します。" },
+            { "id": 46, "category": 2, "question": "日本における慢性咳嗽の最も多い原因は何か？", "answer": "<strong>答え:</strong> 咳喘息<br><strong>解説:</strong> 咳喘息は喘鳴を伴わず、8週間以上持続する咳が唯一の症状であることが特徴です。気管支拡張薬や吸入ステロイド薬が著効します。" },
+            { "id": 47, "category": 2, "question": "チアノーゼが出現するのは、血中の還元型ヘモグロビンが何g/dL以上になった時か？", "answer": "<strong>答え:</strong> 5g/dL以上<br><strong>解説:</strong> 還元型ヘモグロビンの絶対値で規定されるため、貧血患者ではチアノーゼが出現しにくく、逆に多血症の患者では出現しやすい傾向があります。" },
+            { "id": 48, "category": 2, "question": "メトヘモグロビン血症の際、パルスオキシメーターのSpO2値はどう表示される傾向があるか？", "answer": "<strong>答え:</strong> 約85%と表示される。<br><strong>解説:</strong> MetHbはパルスオキシメーターが用いる2つの波長の光を同程度吸収するため、実際の酸素飽和度とは無関係にSpO2が85%付近に収束する特性があります。酸素投与に反応しないチアノーゼで疑います。\nMetHb>15%で中枢性チアノーゼが出現する" },
+            { "id": 49, "category": 2, "question": "重症心不全や脳血管障害で見られる、無呼吸と過換気を周期的に繰り返す異常呼吸パターンを何というか？", "answer": "<strong>答え:</strong> Cheyne-Stokes呼吸 (チェーン・ストークス呼吸)" },
+            { "id": 50, "category": 2, "question": "COPDなどの閉塞性肺疾患で、吸気時に下部肋間が内側に陥凹する所見を何というか？", "answer": "<strong>答え:</strong> Hoover徴候 (フーバー徴候)" },
+            { "id": 51, "category": 2, "question": "腫瘍マーカーのCEAが偽陽性を示す病態・習慣は？", "answer": "<strong>答え:</strong> 加齢、喫煙、肺線維症、肺胞蛋白症など" },
+            { "id": 52, "category": 2, "question": "T-SPOT.TB検査で交差反応を示し、偽陽性の原因となる非結核性抗酸菌を挙げよ。", "answer": "<strong>答え:</strong> M. kansasii, M. szulgai, M. marinum, M. gordonae<br><strong>解説:</strong> これらの菌は結核菌と共通の抗原を持つため、陽性反応を示すことがあります。一方で、MACやBCGには反応しません。" },
+            { "id": 53, "category": 2, "question": "睡眠ポリグラフ検査(PSG)でCPAP療法の保険適用となるAHI(無呼吸低呼吸指数)の基準は？", "answer": "<strong>答え:</strong> AHI ≧ 20回/時<br><strong>解説:</strong> 簡易モニターの場合はAHI ≧ 40回/時が基準となります。\n重症度は軽症がAHI 5-15, 中等症が15－30、重症＞３０" },
+            { "id": 54, "category": 2, "question": "院内肺炎の重症度分類に用いられるI-ROADスコアの5項目は何か？", "answer": "<strong>答え:</strong> ①Immunodeficiency(免疫不全)、②Respiration(SpO2≦90%)、③Orientation(意識障害)、④Age(年齢)、⑤Dehydration(脱水)<br><strong>解説:</strong> これらの項目の頭文字をとってI-ROADと呼ばれます。3項目以上で重症群と判定されます。" },
+            { "id": 55, "category": 2, "question": "じん肺管理区分で「管理2」と判定され、健康管理手帳の交付対象となる基準は？", "answer": "<strong>答え:</strong> X線で第1型（少数の粒状または不整形陰影）の所見があり、かつ肺機能障害がない場合。" },
+            { "id": 56, "category": 2, "question": "縦隔気腫の12%で認められる、心収縮中期に心尖部で聴取されるクリック音を何というか？", "answer": "<strong>答え:</strong> Hamman徴候（ハマン徴候）" },
+            { "id": 57, "category": 2, "question": "右心カテーテル検査において、肺動脈楔入圧(PAWP)が15mmHg以上の場合、何が示唆されるか？", "answer": "<strong>答え:</strong> 左心不全（左心系の疾患）<br><strong>解説:</strong> PAWPは左心房圧を反映するため、この値の上昇はうっ血性心不全などの左心系の圧上昇を示唆します。" },
+            { "id": 58, "category": 2, "question": "コントラスト心エコーで、マイクロバブルが3心拍以降に左房で確認された場合、何を疑うか？", "answer": "<strong>答え:</strong> 肝肺症候群など、肺内のシャント<br><strong>解説:</strong> 3心拍以内に左房に気泡が見えれば心内シャント（ASDなど）を疑いますが、時間が経ってから見える場合は、肺毛細血管の拡張による肺内シャント（肝肺症候群など）を考えます。" },
+            { "id": 59, "category": 2, "question": "肺切除検体を遺伝子検査に用いる場合、推奨されるホルマリン固定時間は？またその理由は？", "answer": "<strong>答え:</strong> 6～48時間<br><strong>解説:</strong> 過固定（長すぎる固定）はDNAの断片化を招き、正確な遺伝子パネル検査の妨げとなるため、適切な固定時間が推奨されています。" },
+            { "id": 60, "category": 2, "question": "Young症候群の三徴は何か？", "answer": "<strong>答え:</strong> ①慢性副鼻腔炎、②気管支拡張症(BE)、③閉塞性無精子症<br><strong>解説:</strong> 線毛機能障害が原因の一つと考えられていますが、PCDとは異なる疾患です。サッカリンテストで線毛機能の遅延を確認します。" },
+            { "id": 61, "category": 2, "question": "簡易睡眠モニターでCPAP療法の保険適用となるAHIの基準は？", "answer": "<strong>答え:</strong> AHI ≧ 40回/時<br><strong>解説:</strong> PSGではAHI≧20が基準ですが、検査の精度が異なるため、簡易モニターではより高い基準が設けられています。" },
+            { "id": 62, "category": 2, "question": "音声振盪が亢進する病態と、低下する病態の代表例をそれぞれ挙げよ。", "answer": "<strong>答え:</strong> 【亢進】限局性の肺炎<br>【低下】胸水、無気肺、気胸、胸膜肥厚<br><strong>解説:</strong> 肺のコンソリデーション（硬化）があると声の振動が伝わりやすくなり（亢進）、空気や液体、胸膜の肥厚があると伝わりにくくなります（低下）。" },
+            { "id": 63, "category": 2, "question": "肺性肥大性骨関節症（Marie-Bamberger症候群）をきたしやすい肺癌の組織型は何か？", "answer": "<strong>答え:</strong> 腺癌または扁平上皮癌<br><strong>解説:</strong> 小細胞癌で合併することは稀とされています。ばち指に加え、四肢長管骨の骨膜炎や関節炎を伴う症候群です。" },
+            { "id": 64, "category": 2, "question": "簡易的な肺胞気-動脈血酸素分圧較差（AaDO2）の計算式は？", "answer": "<strong>答え:</strong> AaDO2 = 150 - PaCO2 / 0.8 - PaO2<br><strong>解説:</strong> 正常値は10mmHg以下で、20mmHg以上を異常とします。開大は、換気血流不均等、シャント、拡散障害の存在を示唆します。" },
+            { "id": 65, "category": 2, "question": "レジオネラ菌の培養に用いられる特殊な培地は何か？", "answer": "<strong>答え:</strong> BCYE-α培地<br><strong>解説:</strong> レジオネラ菌は通常の培地では発育しにくく、L-システインや鉄塩を含むBCYE-α培地が必要となります。" },
+            { "id": 66, "category": 2, "question": "鼻腔内の線毛機能のスクリーニング検査であるサッカリンテストの正常値は？", "answer": "<strong>答え:</strong> 甘味を感じるまで5～15分程度<br><strong>解説:</strong> 線毛機能障害があると、サッカリン粒子の輸送が遅れ、30分以上かかることがあります。PCDやYoung症候群などで延長します。" },
+            { "id": 67, "category": 2, "question": "嗄声（させい）の原因となる疾患を、頻度の高い順に3つ挙げよ。", "answer": "<strong>答え:</strong> ①甲状腺癌 > ②肺癌 > ③食道癌<br><strong>解説:</strong> 肺癌（特に左肺癌による反回神経麻痺）は有名ですが、頻度としては甲状腺癌が最も多い" },
+            { "id": 68, "category": 2, "question": "ばち指の客観的診断基準である、指の厚みの指標と、爪の角度の基準は？", "answer": "<strong>答え:</strong> 【厚み】爪甲部 / DIP関節の厚み ≧ 1<br>【角度】爪と爪甲基部の角度が190度を超える（正常は160度）<br><strong>解説:</strong> 指先が太鼓のばち状になる主観的評価に加え、これらの客観的指標や、両手の人差し指を合わせた際の菱形の隙間が消失するシャムロス徴候が診断に用いられます。" },
+            { "id": 69, "category": 2, "question": "腫瘍マーカーについて、腎障害で偽陽性になりうるものを3つ挙げよ。", "answer": "<strong>答え:</strong> SCC、CYFRA、NSE<br><strong>解説:</strong> これらのマーカーは腎臓から排泄されるため、腎機能が低下すると血中濃度が上昇し、偽陽性を示すことがあります。評価の際には腎機能の確認が必須です。" },
+            { "id": 70, "category": 2, "question": "ニューモシスチス肺炎(PCP)を疑う際に行う代表的な特殊染色は何か？", "answer": "<strong>答え:</strong> メテナミン銀染色（グロコット染色）<br><strong>解説:</strong> この染色法により、気管支肺胞洗浄液（BALF）などに含まれるニューモシスチスの嚢子（シスト）を黒く染め出して検出します。" },
+            { "id": 71, "category": 2, "question": "胸部CTの放射線被ばく量は、自然界から1年間に受ける被ばく量の約何倍か？", "answer": "<strong>答え:</strong> 約5.6倍（CT: 7.8mSv、自然界: 1.4mSv）<br><strong>解説:</strong> CT検査は診断に非常に有用ですが、被ばく量が多いことを念頭に置き、検査の必要性を常に考慮する必要があります。<br>CXP\t0.04mSv、PET-CT\t3.5mSv\n\n" },
+            { "id": 72, "category": 2, "question": "ばち指をきたす循環器疾患は？", "answer": "<strong>答え:</strong> IEやチアノーゼ性心疾患" },
+            { "id": 73, "category": 2, "question": "悪性腫瘍（特に肺癌）を示唆する稀な皮膚所見で、木目状の匍行性の皮疹を特徴とするものは何か？", "answer": "<strong>答え:</strong> 匍行性迂曲性紅斑（Erythema gyratum repens）<br><strong>解説:</strong> 非常に稀ですが、見られた場合は内臓悪性腫瘍、特に肺癌を強く疑うべき腫瘍随伴性皮膚疾患です。" },
+            { "id": 74, "category": 2, "question": "咳喘息と喉頭アレルギーを鑑別する上で最も重要なポイントは何か？", "answer": "<strong>答え:</strong> 気道過敏性の亢進の有無<br><strong>解説:</strong> 咳喘息では気道過敏性が亢進していますが、喉頭アレルギーでは亢進が見られません。これが長引く咳の鑑別点となります。" },
+            { "id": 75, "category": 2, "question": "メトヘモグロビン血症でチアノーゼが出現するのは、MetHbが何%以上になった時か？", "answer": "<strong>答え:</strong> 15%以上<br><strong>解説:</strong> 還元型ヘモグロビンが5g/dL以上でチアノーゼが出現するのとは別に、メトヘモグロビン血症でも特有のチョコレート色のチアノーゼが見られます。" },
+            { "id": 76, "category": 2, "question": "院内肺炎の重症度分類I-ROADスコアで、「中等症群」と判定される具体的な基準は？（2項目以下の場合）", "answer": "<strong>答え:</strong> 2項目以下、かつ CRP ≧ 20mg/dL または 胸部X線写真陰影の拡がりが一側肺の2/3以上<br><strong>解説:</strong> 項目数だけでなく、炎症反応の強さや画像所見の広がりを加味して重症度を判断する点が特徴です。" },
+            { "id": 77, "category": 2, "question": "肺のCT値（HU: ハンスフィールドユニット）において、気腫性変化（LAA: Low Attenuation Area）と定義される値の範囲は？", "answer": "<strong>答え:</strong> -950 HU以下<br><strong>解説:</strong> CT値は水の0 HU、空気の-1000 HUを基準としています。肺気腫などで肺胞壁が破壊され、空気を過剰に含んだ領域は、この閾値を用いて定量的に評価されます。" },
+            { "id": 78, "category": 2, "question": "右心カテーテル検査において、正常な肺動脈血の酸素飽和度と、左右シャントが疑われる値はそれぞれ何%か？", "answer": "<strong>答え:</strong> 【正常値】70～80%<br>【シャント疑い】90%以上<br><strong>解説:</strong> 肺動脈は全身を巡った後の静脈血が流れるため、酸素飽和度は低いはずです。この値が高い場合、左心系の動脈血が心房中隔欠損（ASD）などを介して右心系に流れ込んでいる（左→右シャント）ことを強く示唆します。" },
+            { "id": 79, "category": 2, "question": "中心静脈圧（CVP）を測定する際の体位、測定のタイミング、基準点の3つの条件は？", "answer": "<strong>答え:</strong> 【体位】水平仰臥位<br>【タイミング】呼気終末<br>【基準点】右心房の中心の高さ<br><strong>解説:</strong> 正確なCVP（右心房圧を反映する指標）を測定するためには、これらの条件を統一することが極めて重要です。" },
+            { "id": 80, "category": 2, "question": "悪性腫瘍に伴う高カルシウム血症の骨吸収マーカーとして、計画的な治療管理下で測定が認められているものは何か？", "answer": "<strong>答え:</strong> TRACP-5b, ICTP<br><strong>解説:</strong> これらは破骨細胞の活性を反映するマーカーで、特に骨転移を有する乳癌、肺癌、前立腺癌において、治療効果判定の補助として用いられます。" },
+            { "id": 81, "category": 2, "question": "チアノーゼが出現するSpO2とPaO2の具体的な閾値はどのくらいか？", "answer": "<strong>答え:</strong> SpO2 75%以下、または PaO2 40mmHg以下<br><strong>解説:</strong> これらはあくまで目安の数値です。貧血の有無など、ヘモグロビン濃度によってチアノーゼの出やすさは変わるため、数値だけで判断せず臨床所見と合わせて評価することが重要です。" },
+            { "id": 82, "category": 2, "question": "レジオネラ菌の検出に用いられる特殊な染色法を2つ挙げよ。", "answer": "<strong>答え:</strong> ヒメネス（Gimenez）染色、アクリジンオレンジ染色<br><strong>解説:</strong> レジオネラ菌はグラム染色では染まりにくいため、これらの特殊染色を用いることで菌体をより明確に可視化できます。" },
+            { "id": 83, "category": 2, "question": "マイコプラズマの培養に必要とされる特殊な培地の名称は何か？", "answer": "<strong>答え:</strong> PPLO培地<br><strong>解説:</strong> マイコプラズマは細胞壁を持たず、増殖に特殊な栄養素（コレステロールなど）を要求するため、PPLO（Pleuropneumonia-like Organisms）培地という専用の培地が必要となります。" },
+            { "id": 84, "category": 2, "question": "気道過敏性試験のメサコリン吸入試験において、「陽性」と判定されるFEV1（1秒量）の低下率は何%以上か？", "answer": "<strong>答え:</strong> 20%以上<br><strong>解説:</strong> 健常者では反応しない低濃度のメサコリンで、FEV1が20%以上低下した場合に「気道過敏性あり」と判定します。" },
+            { "id": 85, "category": 2, "question": "真菌関連慢性咳嗽において、関連が示唆されている真菌は何か？", "answer": "<strong>答え:</strong> Bierkandera adusta（ヤケイロダケ）との関連が示唆されています。" },
+            { "id": 86, "category": 2, "question": "Kussmaul呼吸とは何か？どのような病態で見られ、呼吸パターンの特徴は？", "answer": "<strong>答え:</strong> 腎不全やDKA（糖尿病性ケトアシドーシス）に典型的な、代謝性アシドーシスを代償するための呼吸です。特徴は遅く深い呼吸です 。" },
+            { "id": 87, "category": 2, "question": "Biot呼吸とは何か？どのような病態で見られ、呼吸パターンの特徴は？", "answer": "<strong>答え:</strong> 不規則に無呼吸と頻呼吸を短い周期で繰り返す呼吸パターンで、細菌性髄膜炎などで見られます 。" },
+            { "id": 88, "category": 2, "question": "神経筋疾患において、FEV1（1秒量）はどのように変化するか？", "answer": "<strong>答え:</strong> 低下しません 。" },
+            { "id": 89, "category": 3, "question": "肺サーファクタントによって不活化されるため、肺炎には使用できない抗MRSA薬は何か？", "answer": "<strong>答え:</strong> ダプトマイシン (DAP)<br><strong>解説:</strong> DAPは肺サーファクタントと結合して効果を失うため、MRSA肺炎の治療にはバンコマイシン(VCM)やリネゾリド(LZD)などが選択されます。" },
+            { "id": 90, "category": 3, "question": "ムーコル症（接合菌症）の治療で第一選択となる抗真菌薬は何か？", "answer": "<strong>答え:</strong> アムホテリシンB (AMPH-B)<br><strong>解説:</strong> ムーコル症は進行が早く致死的な真菌感染症であり、強力な抗真菌薬であるアムホテリシンBと、可能であれば外科的デブリードマンを組み合わせて治療します。" },
+            { "id": 91, "category": 3, "question": "マイコプラズマ、レジオネラ、クラミジア肺炎、百日咳の潜伏期間を、短い順に並べよ。", "answer": "<strong>答え:</strong> レジオネラは2－10日、百日咳は1-2週間, マイコは2-3週間、クラミジア肺炎は3－4週間<br><strong>解説:</strong> 細菌の種類によって潜伏期間が異なり、疫学調査の参考になります。クラミジア肺炎は潜伏期間がやや長く、集団内でゆっくり蔓延する特徴があります。" },
+            { "id": 92, "category": 3, "question": "肺化膿症の予後不良因子を3つ挙げよ。", "answer": "<strong>答え:</strong> 右下葉の病変、原因菌が好気性菌、高齢者、2ヶ月以上持続、複数の小膿瘍から形成される、など" },
+            { "id": 93, "category": 3, "question": "多剤耐性緑膿菌(MDRP)の定義は？", "answer": "<strong>答え:</strong> カルバペネム系、アミノグリコシド系、ニューキロン系の3系統すべてに耐性を持つこと。" },
+            { "id": 94, "category": 3, "question": "INH（イソニアジド）内服中に摂取を控えるべき食品とその理由は？", "answer": "<strong>答え:</strong> マグロ、ブリなど（青魚）<br><strong>解説:</strong> INHはヒスタミンの分解を阻害するため、ヒスタミンを多く含む食品を摂取すると蓄積し、頭痛などの症状が出ることがあります。" },
+            { "id": 95, "category": 3, "question": "超多剤耐性結核(XDR-TB)の定義は？", "answer": "<strong>答え:</strong> INHとRFPに耐性（＝多剤耐性）であり、かつニューキノロン系と注射可能な抗結核薬（アミノグリコシド系など）にも耐性であること。" },
+            { "id": 96, "category": 3, "question": "クリプトコッカス髄膜脳炎の第一選択薬の組み合わせは？", "answer": "<strong>答え:</strong> アムホテリシンB + 5-FC（フルシトシン）<br><strong>解説:</strong> 播種性や中枢神経系のクリプトコッカス症では、強力な殺菌作用を持つAMPH-Bと、髄液移行性の良い5-FCの併用療法が推奨されます。" },
+            { "id": 97, "category": 3, "question": "感染症法において、結核、SARS、MARS、鳥インフルエンザ(H5N1, H7N9)は何類感染症に分類されるか？", "answer": "<strong>答え:</strong> 二類感染症<br><strong>解説:</strong> これらは感染力や罹患した場合の重篤性に基づき、入院勧告や特定の公費負担医療の対象となる二類感染症に指定されています。" },
+            { "id": 98, "category": 3, "question": "M. abscessus と M. massiliense のマクロライドへの感受性と予後を分ける、耐性遺伝子の名称は？", "answer": "<strong>答え:</strong> erm(41)<br><strong>解説:</strong> M. abscessus subsp. abscessus は誘導性のerm(41)遺伝子を持ちマクロライド耐性となりやすいですが、M. massiliense はこの遺伝子に変異がありマクロライドが有効なことが多く、比較的予後が良いとされます。" },
+            { "id": 99, "category": 3, "question": "脾臓摘出後の重症敗血症リスクが特に高いのは、術後どのくらいの期間か？", "answer": "<strong>答え:</strong> 術後2～3年<br><strong>解説:</strong> 脾臓は肺炎球菌などの莢膜を持つ細菌に対する免疫に重要な役割を果たします。リスクは生涯続きますが、特に術後数年間は注意が必要です。" },
+            { "id": 100, "category": 3, "question": "M. kansasii 感染症の標準的な治療レジメンは？", "answer": "<strong>答え:</strong> INH + RFP + EB<br><strong>解説:</strong> 結核の治療薬の多くが有効で、PZAは自然耐性のため使用しません。治療反応性は比較的良好です。" },
+            { "id": 101, "category": 3, "question": "播種性トリコスポロン症において、偽陽性を示すことがある真菌マーカーは何か？", "answer": "<strong>答え:</strong> クリプトコッカス抗原<br><strong>解説:</strong> トリコスポロンがクリプトコッカスと共通のGXM抗原を持つため、交差反応により偽陽性となります。鑑別診断で重要です。" },
+            { "id": 102, "category": 3, "question": "耐性菌感染症のリスク因子として挙げられる、抗菌薬使用歴や入院歴は何日以内？", "answer": "<strong>答え:</strong> 90日以内の静注(IV)抗菌薬使用歴、または2日以上の入院歴<br><strong>解説:</strong> これらの既往がある場合、市中肺炎であっても耐性菌を想定した初期治療を検討する必要があります。" },
+            { "id": 103, "category": 3, "question": "ノカルジアとアクチノマイセスについて、抗酸菌染色と酸素要求性の違いを述べよ。", "answer": "<strong>答え:</strong> ノカルジア: 抗酸菌染色で染まる・好気性<br>アクチノマイセス: 抗酸菌染色で染まらない・嫌気性<br><strong>解説:</strong> 両者は分岐状のグラム陽性桿菌で似ていますが、これらの生物学的な違いが鑑別と同定の鍵となります。" },
+            { "id": 104, "category": 3, "question": "肺吸虫症、トキソカラ症(猫・イヌ回虫)、ヒト回虫症、イヌ糸状虫症、糞線虫の主な感染源・感染経路、治療薬はそれぞれ何か？", "answer": "<strong>答え:</strong> 【肺吸虫症】淡水カニ、イノシシやシカの生食。プラジカンテル<br>【トキソカラ症】犬猫の接触、牛肉や鶏肉の生肉。アルベンダゾール<br>【ヒト回虫症】ヒトが終生宿主。汚染土壌。アルベンダゾール<br>【イヌ糸状虫症】イヌからの蚊を介した感染。肺にCoin lesionを生じるが、治療は不要。<br>【糞線虫】終生宿主はヒト。土壌汚染。イベルメクチン" },
+            { "id": 105, "category": 3, "question": "肺化膿症で、内科的治療に抵抗性の場合に手術が考慮される具体的な基準を3つ挙げよ。", "answer": "<strong>答え:</strong> ①喀血、膿胸、気管支胸膜瘻を合併した場合<br>②肺癌の合併が疑われる場合<br>③8週以上の治療でも6cm以上の膿瘍が残存する場合<br><strong>解説:</strong> これらの条件は、内科的治療の限界であり、ドレナージや原因の除去のために外科的介入が必要となる状況を示します。" },
+            { "id": 106, "category": 3, "question": "肺化膿症の予後不良因子となる原因菌を3つ挙げよ。", "answer": "<strong>答え:</strong> 緑膿菌、クレブシエラ(Kleb)、ブドウ球菌<br><strong>解説:</strong> 一般的な原因である嫌気性菌に比べ、これらの菌による肺化膿症は組織破壊が強く、治療に難渋し予後が悪くなる傾向があります。" },
+            { "id": 107, "category": 3, "question": "カンジダやアスペルギルスなどの真菌も形成することがある、菌が産生する多糖体などを足場とした微生物の集合体を何というか？", "answer": "<strong>答え:</strong> バイオフィルム<br><strong>解説:</strong> バイオフィルムを形成すると、抗菌薬や宿主の免疫から内部の菌が守られるため、治療抵抗性の原因となります。カテーテル関連血流感染症(CRBSI)がその代表例です。" },
+            { "id": 108, "category": 3, "question": "感染症法において、エキノコックス症とデング熱はそれぞれ何類感染症に分類されるか？", "answer": "<strong>答え:</strong> 【エキノコックス症】四類感染症<br>【デング熱】四類感染症<br><strong>解説:</strong> 四類感染症は、動物や飲食物などを介して人に感染し、公衆衛生に影響を与える恐れがある感染症が分類されます。" },
+            { "id": 109, "category": 3, "question": "感染症法において、急性灰白髄炎（ポリオ）とジフテリアは何類感染症に分類されるか？", "answer": "<strong>答え:</strong> 二類感染症<br><strong>解説:</strong> 二類感染症は、感染力や重篤性から、特定の条件下で入院勧告の対象となる疾患です。結核やSARSもここに含まれます。" },
+            { "id": 110, "category": 3, "question": "感染症法において、侵襲性髄膜炎菌感染症と梅毒はそれぞれ何類感染症に分類されるか？", "answer": "<strong>答え:</strong> 【侵襲性髄膜炎菌感染症】五類感染症（全数把握・直ちに届出）<br>【梅毒】五類感染症（全数把握）<br><strong>解説:</strong> 同じ五類（全数把握）でも、特に緊急性の高い疾患は「直ちに届出」が義務付けられています。" },
+            { "id": 111, "category": 3, "question": "犬糸状虫症（dirofilariasis）の肺病変は、胸部画像でどのような特徴的な所見を呈することが多いか？また、その治療方針は？", "answer": "<strong>答え:</strong> 【画像所見】コインリージョン（硬貨状陰影）<br>【治療】不要<br><strong>解説:</strong> ヒトは終宿主ではないため、幼虫は肺で死滅し肉芽腫を形成します。肺癌との鑑別が重要ですが、多くは経過観察のみで治療は必要ありません。" },
+            { "id": 112, "category": 3, "question": "日本の感染症法において、A型肝炎およびE型肝炎は何類感染症に分類されるか？", "answer": "<strong>答え:</strong> 四類感染症<br><strong>解説:</strong> どちらも経口感染するウイルス性肝炎であり、飲食物を介した感染拡大を防ぐ目的で四類に指定されています。" },
+            { "id": 113, "category": 3, "question": "日本の感染症法において、つつが虫病と日本脳炎は何類感染症に分類されるか？", "answer": "<strong>答え:</strong> 四類感染症<br><strong>解説:</strong> これらはダニや蚊といった節足動物によって媒介されるため、動物由来感染症として四類に分類されます。" },
+            { "id": 114, "category": 3, "question": "日本の感染症法において、麻疹（はしか）と風疹は、届出基準においてどのように分類されるか？", "answer": "<strong>答え:</strong> どちらも五類感染症（全数把握・直ちに届出）<br><strong>解説:</strong> 感染力が非常に強く、集団発生を防ぐために、診断した医師は直ちに保健所へ届け出る義務があります。" },
+            { "id": 115, "category": 3, "question": "日本の感染症法において、RSウイルス感染症と手足口病は、どのように監視されているか？", "answer": "<strong>答え:</strong> 五類感染症（定点把握）<br><strong>解説:</strong> 全数報告ではなく、指定された医療機関（定点）からの報告を集計することで、全国的な流行状況を監視しています。" },
+            { "id": 116, "category": 3, "question": "潜在性結核感染症(LTBI)に対する2剤レジメンの治療内容と期間は？", "answer": "<strong>答え:</strong> リファンピシン(RFP) + イソニアジド(INH) を 4ヶ月間<br><strong>解説:</strong> 古典的なINH単剤9ヶ月療法に代わる、より短期間の治療レジメンとして推奨されています。" },
+            { "id": 117, "category": 3, "question": "脾臓摘出後の患者において、敗血症のリスクと摘出時年齢の関係は？", "answer": "<strong>答え:</strong> 摘出時の年齢が若いほど、敗血症のリスクも高いと言われる。<br><strong>解説:</strong> 小児期は免疫系の発達段階にあるため、脾臓の役割がより大きく、若年での摘出は成人での摘出よりも感染症リスクが高まります。" },
+            { "id": 118, "category": 3, "question": "多剤耐性緑膿菌（MDRP）や多剤耐性アシネトバクター（MDRA）は、どの系統の抗菌薬に耐性を持つか？", "answer": "<strong>答え:</strong> カルバペネム系、アミノグリコシド系（AG）、ニューキノロン系（NQ）のすべてに耐性を持ちます 。" },
+            { "id": 119, "category": 3, "question": "MDRPやMDRAに対して2015年から使用可能になった薬剤は何か？", "answer": "<strong>答え:</strong> コリスチンです 。" },
+            { "id": 120, "category": 3, "question": "感染症法において、播種性クリプトコッカス症と肺クリプトコッカス症はそれぞれどのように扱われるか？", "answer": "<strong>答え:</strong> 播種性クリプトコッカス症：5類感染症（定点把握）に分類されます 。<br>肺クリプトコッカス症：指定はありません 。" },
+            { "id": 121, "category": 3, "question": "Mycobacterium abscessus感染症の治療レジメンの基本構成は？", "answer": "<strong>答え:</strong> クラリスロマイシン（CAM）に、アミカシン（AMK）などのアミノグリコシド系、さらにイミペネム（IPM/CS)を組み合わせます 。" },
+            { "id": 122, "category": 3, "question": "寄生虫症の一般的な診断方法は？", "answer": "<strong>答え:</strong> 虫体の検出または抗体検査によって行われます 。" },
+            { "id": 123, "category": 3, "question": "日本で見られる主な肺吸虫症を2つ挙げよ。また、どちらがより多いか？", "answer": "<strong>答え:</strong> 宮崎肺吸虫症とウェステルマン肺吸虫症があり、日本ではウェステルマン肺吸虫症の方が多いです 。" },
+            { "id": 124, "category": 3, "question": "肺吸虫症の第一選択薬は何か？", "answer": "<strong>答え:</strong> プラジカンテルです 。" },
+            { "id": 125, "category": 3, "question": "トキソカラ症の原因、主な感染源、第一選択薬はそれぞれ何か？", "answer": "<strong>答え:</strong> 原因: 犬回虫（T.canis）および猫回虫（T. cati）の幼虫 。<br>感染源: 犬や猫との接触、牛肉や鶏肉などの生肉の摂取が多い 。<br>第一選択薬: アルベンダゾールまたはメペンダゾール 。" },
+            { "id": 126, "category": 3, "question": "アスカリス症（回虫症）の原因となる寄生虫は何か？", "answer": "<strong>答え:</strong> ヒト回虫（Ascaris lumbricoides）です 。" },
+            { "id": 127, "category": 3, "question": "糞線虫症の第一選択薬は何か？", "answer": "<strong>答え:</strong> イベルメクチンです 。" },
+            { "id": 128, "category": 4, "question": "40歳以上の日本人におけるCOPDの有病率は？", "answer": "<strong>答え:</strong> 8.4% (NICE study)<br><strong>解説:</strong> 非常に多くの潜在患者がいると推定されています。" },
+            { "id": 129, "category": 4, "question": "喫煙者のうち、COPDを発症するのは約何%か？", "answer": "<strong>答え:</strong> 15-20%<br><strong>解説:</strong> 喫煙はCOPDの最大のリスク因子ですが、喫煙者全員が発症するわけではなく、遺伝的要因なども関与すると考えられています。" },
+            { "id": 130, "category": 4, "question": "アレルギー性気管支肺アスペルギルス症（ABPM）の診断基準で、中枢性気管支拡張像（CT所見）の他に必須とされる喘息の既往などを含む10項目のうち、診断には何項目以上を満たす必要があるか？", "answer": "<strong>答え:</strong> 6項目以上<br><strong>解説:</strong> 必須項目2つ（喘息、好酸球増多）に加え、特異的IgE陽性、沈降抗体陽性、粘液栓などを組み合わせて診断します。" },
+            { "id": 131, "category": 4, "question": "小児喘息の約何%が成人喘息に移行するか？", "answer": "<strong>答え:</strong> 約30%<br><strong>解説:</strong> 小児喘息の多くは寛解しますが、約3割は成人期に持ち越すとされています。" },
+            { "id": 132, "category": 4, "question": "テオフィリンの有効血中濃度と、胃酸分泌亢進作用について説明せよ。", "answer": "<strong>答え:</strong> 血中濃度目標は5-15 µg/mLです。副作用として胃酸分泌亢進作用があり、胃潰瘍に注意が必要です。" },
+            { "id": 133, "category": 4, "question": "禁煙補助薬のバレニクリンは、いつから服用を開始し、合計何週間服用するか？", "answer": "<strong>答え:</strong> 禁煙開始予定日の1週間前から服用を開始し、合計12週間服用する。" },
+            { "id": 134, "category": 4, "question": "小児気管支喘息との関連がGWASで最も強く示された遺伝子は何か？", "answer": "<strong>答え:</strong> ORMDL3<br><strong>解説:</strong> 小胞体の膜タンパク質に関連する遺伝子で、その機能異常が気道上皮の機能障害や気道過敏性亢進に関与すると考えられています。" },
+            { "id": 135, "category": 4, "question": "アレルギー性気管支肺真菌症（ABPM）の診断基準にある、CTで粘液栓が高吸収を示す所見を何というか？", "answer": "<strong>答え:</strong> High-attenuation mucus (HAM)<br><strong>解説:</strong> 粘液栓の中に含まれるカルシウム塩や金属イオンにより、CTで周囲の筋肉よりも高濃度（白く）見える特徴的な所見です。" },
+            { "id": 136, "category": 4, "question": "食物依存性運動誘発アナフィラキシーの原因食物として多いもの2つと、増強因子を挙げよ。", "answer": "<strong>答え:</strong> 【原因食物】小麦、甲殻類<br>【増強因子】NSAIDs<br><strong>解説:</strong> 特定の食物を摂取後、2時間以内に運動することでアナフィラキシーが誘発される病態です。" },
+            { "id": 137, "category": 4, "question": "COPD発症に関与する強力な単一リスク遺伝子と、中等度の影響を持つ共通変異遺伝子をそれぞれ挙げよ。", "answer": "<strong>答え:</strong> 【単一遺伝子】SERPINA1（α1アンチトリプシン欠損症の原因遺伝子）<br>【共通変異】CHRNA3/5, HHIP, FAM13Aなど" },
+            { "id": 138, "category": 4, "question": "肺癌患者のうち、COPDを合併している割合はどのくらいか？", "answer": "<strong>答え:</strong> 40～70%<br><strong>解説:</strong> 喫煙という共通のリスク因子があるため、両疾患の合併は非常に高率です。肺癌の治療方針を決定する上で、呼吸機能の評価は極めて重要です。" },
+            { "id": 139, "category": 4, "question": "喘息とCOPDの合併（ACO: Asthma-COPD Overlap）は、COPD患者の約何%に見られるか？", "answer": "<strong>答え:</strong> 15%以上<br><strong>解説:</strong> ACOは増悪頻度が高く、QOLの低下が著しいとされ、両疾患の要素を考慮した治療介入が必要となります。" },
+            { "id": 140, "category": 4, "question": "オマリズマブ（抗IgE抗体）の投与対象となる血清総IgE値の範囲は？", "answer": "<strong>答え:</strong> 30 ～ 1500 IU/mL<br><strong>解説:</strong> 重症アトピー型喘息の治療に用いられますが、IgE値がこの範囲内にあることが適応の条件の一つです。" },
+            { "id": 141, "category": 4, "question": "妊娠中の喘息管理において、安全性に関するエビデンスが十分でなく、使用に注意が必要とされる薬剤は何か？", "answer": "<strong>答え:</strong> LTRA（ロイコトリエン受容体拮抗薬）、LAMA（長時間作用性抗コリン薬）<br><strong>解説:</strong> 妊娠中の喘息増悪は母子ともに危険なため、吸入ステロイド（ICS）を主体とした治療継続が原則です。これらの薬剤は安全性が確立しておらず、有益性が危険性を上回る場合に限り使用が検討されます。" },
+            { "id": 142, "category": 4, "question": "アレルギー検査の皮内テストで、前腕に注入する抗原液の量はどのくらいか？", "answer": "<strong>答え:</strong> 0.02ml<br><strong>解説:</strong> プリックテストより感度が高い検査ですが、アナフィラキシーのリスクも高いため、施行には注意が必要です。" },
+            { "id": 143, "category": 4, "question": "ダニやスギ花粉に対する舌下免疫療法（SLIT）で、効果を得るために推奨される治療継続期間はどのくらいか？", "answer": "<strong>答え:</strong> 3年以上<br><strong>解説:</strong> 治療を長期間継続することで、治療終了後もアレルギー症状を抑制する効果が持続すると期待されています。" },
+            { "id": 144, "category": 4, "question": "禁煙補助薬のバレニクリンを処方する際、注意を促すべき重要な精神神経系の副作用は何か？", "answer": "<strong>答え:</strong> 不安、抑うつ、自殺念慮<br><strong>解説:</strong> 禁煙補助効果が高い薬剤ですが、これらの精神症状のリスクがあるため、患者の状態を慎重に観察する必要があります。" },
+            { "id": 145, "category": 4, "question": "禁煙補助薬のニコチンパッチの基本的な使用方法は？", "answer": "<strong>答え:</strong> 高用量のものから使用を開始し、徐々に減量していく。<br><strong>解説:</strong> 体内のニコチン濃度を安定させて離脱症状を抑えつつ、段階的にニコチンへの依存を減らしていく使用法が一般的です。" },
+            { "id": 146, "category": 4, "question": "舌下免疫療法（SLIT）で用いられる薬剤について、スギ花粉とダニ（ハウスダスト）に対するものをそれぞれ挙げよ。", "answer": "<strong>答え:</strong> スギ花粉: シダキュア、シダトレン<br>ダニ（ハウスダスト）: ミティキュアなど" },
+            { "id": 147, "category": 4, "question": "アレルゲン免疫療法（AIT: SLITやSCITを含む）の適応年齢は？", "answer": "<strong>答え:</strong> 5歳以上です 。" },
+            { "id": 148, "category": 4, "question": "喘息の有病率について、小児期と成人期での性差は？", "answer": "<strong>答え:</strong> 小児期: 男児に多く見られます 。<br>成人期: 女性の方が有病率が高くなります 。" },
+            { "id": 149, "category": 5, "question": "気管・気管支軟化症の気管支鏡所見における形態学的分類で、気管軟骨の断裂を伴うのはどちらの型か？", "answer": "<strong>答え:</strong> 刀鞘型（とうしょうがた）<br><strong>解説:</strong> 呼気時に気管が前後方向に扁平化する「三日月型」と、左右方向に狭小化する「刀鞘型」に分類されます。刀鞘型は軟骨の異常が主体です。" },
+            { "id": 150, "category": 5, "question": "IPF（特発性肺線維症）患者における急性増悪の年間発症頻度は？", "answer": "<strong>答え:</strong> 年間5-15%<br><strong>解説:</strong> IPFの予後を大きく左右する病態で、初回増悪後の死亡率は50%以上と極めて高いです。" },
+            { "id": 151, "category": 5, "question": "サルコイドーシスの臨床診断群（組織診断なし）と診断するために必要な検査所見は5項目中いくつ以上か？", "answer": "<strong>答え:</strong> 2項目以上<br><strong>解説:</strong> 5項目とは、①両側肺門リンパ節腫脹(BHL)、②血清ACE/リゾチーム高値、③Gaシンチ/PETでの集積、④BALFのリンパ球比率上昇/CD4/CD8比上昇、⑤他臓器の特異的画像所見、です。" },
+            { "id": 152, "category": 5, "question": "肺分画症において、還流する静脈が肺静脈であるのは肺葉内型、肺葉外型のどちらか？", "answer": "<strong>答え:</strong> 肺葉内型<br><strong>解説:</strong> 肺葉内型は肺静脈に還流するため、左→右シャントにはなりません。一方、肺葉外型は体静脈系（奇静脈など）に還流します。 栄養動脈はどちらも大動脈系です。" },
+            { "id": 153, "category": 5, "question": "Birt-Hogg-Dubé (BHD) 症候群の三主徴は？", "answer": "<strong>答え:</strong> ①多発肺嚢胞（とそれに伴う気胸）、②多発・両側性腎腫瘍（混合型腎細胞がんが多い）、③皮膚の線維毛包腫<br><strong>解説:</strong> 常染色体優性遺伝の疾患で、FLCN遺伝子の変異が原因です。 肺嚢胞は下葉・縦隔側に多いのが特徴です。" },
+            { "id": 154, "category": 5, "question": "IgG4関連疾患の組織診断基準における、IgG4陽性形質細胞数とIgG4/IgG陽性細胞比の基準値は？", "answer": "<strong>答え:</strong> IgG4陽性細胞 ≧ 10 cells/HPF かつ IgG4/IgG比 > 40%" },
+            { "id": 155, "category": 5, "question": "肺リンパ脈管筋腫症（LAM）の診断で、LAM細胞の証明に有用な免疫染色マーカーを3つ挙げよ。", "answer": "<strong>答え:</strong> HMB-45, α-SMA, D2-40, ER, PRなど<br><strong>解説:</strong> LAM細胞は平滑筋とメラノサイトの両方の性質を持つため、平滑筋マーカー(α-SMA)とメラノーママーカー(HMB-45)の両方が陽性になるのが特徴的です。" },
+            { "id": 156, "category": 5, "question": "原発性線毛機能不全症（PCD）の約半数を占める、内臓逆位・慢性副鼻腔炎・気管支拡張症を三徴とする症候群は？", "answer": "<strong>答え:</strong> Kartagener症候群（カルタゲナー症候群）" },
+            { "id": 157, "category": 5, "question": "ニンテダニブの有害事象として、下痢以外に注意すべき稀だが重篤なものは？", "answer": "<strong>答え:</strong> 血栓塞栓症、腸管穿孔" },
+            { "id": 158, "category": 5, "question": "肺ランゲルハンス細胞組織球症（PLCH）の病理診断で、陽性となるマーカーは？また、気管支肺胞洗浄液（BALF）での診断基準は？", "answer": "<strong>答え:</strong> 【マーカー】S-100、CD1a<br>【BALF】CD1a陽性細胞が5%以上" },
+            { "id": 159, "category": 5, "question": "TAFRO症候群の名称の由来となった5つの徴候は何か？", "answer": "<strong>答え:</strong> Thrombocytopenia(血小板減少)、Anasarca(全身性浮腫/胸腹水)、Fever(発熱)、Reticulin fibrosis(骨髄の細網線維化)、Organomegaly(臓器腫大)" },
+            { "id": 160, "category": 5, "question": "リンパ脈管筋腫症（LAM）が、閉経後や男性に発症した場合に考えられる背景疾患は？", "answer": "<strong>答え:</strong> 結節性硬化症（TSC）<br><strong>解説:</strong> 孤発性LAMはほぼ全例が妊娠可能年齢の女性に発症しますが、遺伝性疾患であるTSCに伴うLAM（TSC-LAM）は男性にも発症することがあります。" },
+            { "id": 161, "category": 5, "question": "好酸球性多発血管炎性肉芽腫症(EGPA)の予後を予測するFive Factor Score(2011)の5項目は何か？", "answer": "<strong>答え:</strong> ①年齢>65歳、②心症状、③消化管症状、④腎不全、⑤頭頸部（副鼻腔）病変がないこと<br><strong>解説:</strong> 5番目の「ないこと」がスコアに含まれる点が特徴的です。スコアが高いほど予後不良とされます。" },
+            { "id": 162, "category": 5, "question": "肺嚢胞、ブラ、ブレブの定義をそれぞれ述べよ。", "answer": "<strong>答え:</strong> 肺嚢胞：壁の厚さが2mm未満の含気腔<br>ブラ：1cm以上の異常含気腔で、病理学的には肺実質内にあるもの<br>ブレブ：臓側胸膜の一部を破壊して胸膜内に入り込んだ含気腔<br><strong>解説:</strong> これらの区別は、特に気胸の原因を考える上で重要です。ブラは肺気腫に合併することが多いです。" },
+            { "id": 163, "category": 5, "question": "Birt-Hogg-Dubé (BHD) 症候群でみられる多発肺嚢胞は、肺のどの領域に好発するか？", "answer": "<strong>答え:</strong> 下葉、縦隔側<br><strong>解説:</strong> PLCHの嚢胞が上葉優位であるのに対し、BHD症候群では下葉優位に分布するという特徴があり、画像診断での鑑別点の一つとなります。" },
+            { "id": 164, "category": 5, "question": "特発性肺線維症（IPF）の最も多い死因は何か？また、それは死因全体の何%を占めるか？", "answer": "<strong>答え:</strong> 急性増悪（AE）、40%<br><strong>解説:</strong> 癌の合併や呼吸不全の進行よりも、急性増悪がIPF患者の生命予後を決定する最大の要因です。" },
+            { "id": 165, "category": 5, "question": "IPAF（間質性肺炎と自己免疫の特徴）の定義において、診断基準から明確に除外されている血管炎・画像パターンは何か？", "answer": "<strong>答え:</strong> MPO-ANCA関連血管炎とUIP（通常型間質性肺炎）パターン<br><strong>解説:</strong> IPAFは、特定の膠原病と診断できないが自己免疫の関与が疑われる間質性肺炎の概念であり、典型的な顕微鏡的多発血管炎やIPFは含みません。" },
+            { "id": 166, "category": 5, "question": "多中心性キャッスルマン病で、IL-6の上昇によって引き起こされる特徴的な検査所見は？", "answer": "<strong>答え:</strong> 貧血、低アルブミン血症、低コレステロール血症、多クローン性高ガンマグロブリン血症<br><strong>解説:</strong> IL-6が肝臓でのヘプシジン産生亢進（→貧血）や急性期タンパク産生（→相対的なアルブミン低下など）を誘導するため、これらの多彩な検査異常が見られます。" },
+            { "id": 167, "category": 5, "question": "間質性肺炎合併肺癌の化学療法で、間質性肺炎増悪のリスクが高いため特に注意が必要な薬剤を3つ挙げよ。", "answer": "<strong>答え:</strong> イリノテカン(IRI)、ゲムシタビン(GEM)、ドキソルビシン(AMR)<br><strong>解説:</strong> これらの薬剤は、間質性肺炎を合併している患者への投与は原則禁忌または慎重投与とされています。" },
+            { "id": 168, "category": 5, "question": "肺葉内分画症に感染が起こるメカニズムとして考えられている、肺胞間の交通路は何か？", "answer": "<strong>答え:</strong> Kohn孔（コーン孔）<br><strong>解説:</strong> 肺葉内分画症は正常な気管支との交通はありませんが、隣接する正常肺との間に存在するKohn孔を介して空気や細菌が入り込み、感染巣となることがあります。" },
+            { "id": 169, "category": 5, "question": "サルコイドーシスの2023年改訂診断基準で新設された、心臓以外の臓器に所見がない場合の診断群は何か？", "answer": "<strong>答え:</strong> 心臓限局性臨床診断群<br><strong>解説:</strong> 心臓サルコイドーシスは予後を大きく左右するため、他臓器に症状がなくても、心臓の検査所見（PET/CTやLGE-MRIを含む）が揃えば診断可能とする基準が設けられました。" },
+            { "id": 170, "category": 5, "question": "多中心性キャッスルマン病の病理組織像で、ほとんどを占める組織型は何か？", "answer": "<strong>答え:</strong> 形質細胞型 (Plasma cell type)<br><strong>解説:</strong> 一方で、限局性のキャッスルマン病では硝子血管型 (Hyaline vascular type) が多いという違いがあります。" },
+            { "id": 171, "category": 5, "question": "肺葉内肺分画症と肺葉外肺分画症は、胎生期の肺芽の異常が起こる時期にどのような違いがあるか？", "answer": "<strong>答え:</strong> 肺葉内型：肺芽の後期（胎生6週以降）の分岐異常<br>肺葉外型：異常肺芽が早期（胎生4-5週）に迷入し隔離される<br><strong>解説:</strong> この発生時期の違いが、正常肺との連続性（胸膜の有無）や、他の先天奇形の合併頻度の違いに繋がります。" },
+            { "id": 172, "category": 5, "question": "サルコイドーシスにおける病変部位の好発頻度を、高い順に並べよ（肺・皮膚・眼球）。", "answer": "<strong>答え:</strong> 肺 > 眼球 > 皮膚<br><strong>解説:</strong> 肺（特に両側肺門リンパ節腫脹）が最も代表的な病変ですが、眼症状（ぶどう膜炎など）や皮膚症状（結節性紅斑など）も高頻度に見られます。" },
+            { "id": 173, "category": 5, "question": "巨大ブラ（Giant bulla）の定義は何か？", "answer": "<strong>答え:</strong> 片側胸腔の3分の1以上を占めるもの<br><strong>解説:</strong> 巨大ブラは正常な肺を圧迫して呼吸困難の原因となるため、手術による切除（ブラクトミー）の良い適応となります。" },
+            { "id": 174, "category": 5, "question": "気管支軟化症の確定診断に必須とされる検査は何か？", "answer": "<strong>答え:</strong> 気管支鏡検査（BF）<br><strong>解説:</strong> CTなどでも気管の虚脱を示唆する所見は得られますが、呼気・吸気での内腔の動的な変化を直接観察できる気管支鏡が確定診断には不可欠です。" },
+            { "id": 175, "category": 5, "question": "気管支軟化症の刀鞘型と三日月型の病理学的な違いは何か？", "answer": "<strong>答え:</strong> 【刀鞘型】気管軟骨の断裂が主体<br>【三日月型】膜様部の縦走弾性線維の減少や萎縮が主体<br><strong>解説:</strong> 刀鞘型は軟骨の構造異常、三日月型は後壁の膜様部の脆弱性が原因であり、発生機序が異なります。" },
+            { "id": 176, "category": 5, "question": "特発性間質性肺炎（IIPs）の重症度分類（日本）において、Stage Iの定義は？", "answer": "<strong>答え:</strong> 安静時の動脈血酸素分圧（PaO2）が80 Torr以上であること。<br><strong>解説:</strong> ただし、6分間歩行試験でSpO2が90%未満に低下する場合は、安静時PaO2が80 Torr以上でもStage IIIとして扱う例外規定があります。" },
+            { "id": 177, "category": 5, "question": "慢性ベリリウム症の病態として特徴的な、2段階の免疫学的プロセスを説明せよ。", "answer": "<strong>答え:</strong> ①少量の曝露で感作が成立し、②その後の曝露で肺などに非乾酪性肉芽腫を生じる。<br><strong>解説:</strong> これはIV型アレルギー（細胞性免疫）による反応であり、サルコイドーシスと類似した病態を呈する原因となっています。" },
+            { "id": 178, "category": 5, "question": "肺胞微石症の胸部X線写真でみられる、無数の細かい砂粒状の陰影を何と表現するか？", "answer": "<strong>答え:</strong> サンドストーム（砂嵐）様陰影<br><strong>解説:</strong> 肺胞腔内にリン酸カルシウムの微石がびまん性に沈着することで生じる、非常に特徴的な画像所見です。" },
+            { "id": 179, "category": 5, "question": "日本における気管支結石症の最も多い原因と、好発部位はどこか？", "answer": "<strong>答え:</strong> 【原因】肺結核<br>【好発部位】中葉枝<br><strong>解説:</strong> 結核による石灰化リンパ節が気管支壁を圧迫・穿通することで形成されます。欧米ではヒストプラズマが主な原因です。" },
+            { "id": 180, "category": 5, "question": "皮膚筋炎に合併する間質性肺炎で、急速進行性の経過をとりやすい自己抗体は何か？", "answer": "<strong>答え:</strong> 抗MDA5抗体<br><strong>解説:</strong> この抗体が陽性の皮膚筋炎は、筋症状が軽微（amyopathic）であるにもかかわらず、治療抵抗性の急速進行性間質性肺炎を高率に合併し、予後不良です。" },
+            { "id": 181, "category": 5, "question": "再発性多発軟骨炎が原因で起こりうる、重篤な呼吸器合併症は何か？", "answer": "<strong>答え:</strong> 気管・気管支軟化症<br><strong>解説:</strong> 全身の軟骨に炎症が起きる自己免疫疾患であり、気道軟骨が破壊・脆弱化することで、呼気時の気道虚脱を引き起こします。" },
+            { "id": 182, "category": 5, "question": "fibrotic NSIP患者の約30%の死因は何か？", "answer": "<strong>答え:</strong> 元々の病気（原疾患）で死亡します 。" },
+            { "id": 183, "category": 6, "question": "CPFE (気腫合併肺線維症)に肺癌が合併する際、最も多い組織型は何か？", "answer": "<strong>答え:</strong> 扁平上皮癌<br><strong>解説:</strong> 通常の肺癌では腺癌が最多ですが、CPFEでは上肺野の気腫、下肺野の線維化を背景に扁平上皮癌が多く発生します。" },
+            { "id": 184, "category": 6, "question": "石綿（アスベスト）曝露において、比較的低濃度の曝露でも発症リスクがある疾患を2つ挙げよ。", "answer": "<strong>答え:</strong> 悪性中皮腫、胸膜プラーク<br><strong>解説:</strong> 石綿肺や肺癌、良性石綿胸水は高濃度曝露がリスクですが、中皮腫と胸膜プラークは低濃度・短期間の曝露でも発症することが知られています。" },
+            { "id": 185, "category": 6, "question": "肺腺癌の免疫染色で陽性となる代表的なマーカーを3つ挙げよ。", "answer": "<strong>答え:</strong> TTF-1, Napsin A, CK7<br><strong>解説:</strong> これらのマーカーは肺腺癌の鑑別に非常に有用です。特にTTF-1とNapsin Aは特異性が高いです。大腸癌ではCK20が陽性、CK7が陰性となり鑑別できます。" },
+            { "id": 186, "category": 6, "question": "CT画像におけるPart-solid GGOのTNM分類では、どの部分の径を測定するか？", "answer": "<strong>答え:</strong> 充実成分 (solid component) の径<br><strong>解説:</strong> すりガラス影部分の大きさは無視し、充実成分の最大径でT因子を決定します。充実成分径が5mm以下で全径30mm以下のものはT1mi（微小浸潤癌）に分類されます。" },
+            { "id": 187, "category": 6, "question": "浸潤性肺腺癌の組織亜型の中で、最も予後不良とされるパターンを2つ挙げよ。", "answer": "<strong>答え:</strong> 微小乳頭型 (Micropapillary), 充実型 (Solid)<br><strong>解説:</strong> これらのパターンが優位な場合、Grade3に分類され、再発や転移のリスクが高いとされます。 STAS（気腔内散布）の頻度も高いです。" },
+            { "id": 188, "category": 6, "question": "RECIST基準において、部分奏効(PR)と判定される腫瘍縮小率の基準は？", "answer": "<strong>答え:</strong> 標的病変の長径和が30%以上減少。<br><strong>解説:</strong> 一方、進行(PD)は20%以上の増大と定義されています。" },
+            { "id": 189, "category": 6, "question": "第3世代ALK-TKIに分類される薬剤名は？", "answer": "<strong>答え:</strong> ロルラチニブ (ローブレナ®)<br><strong>解説:</strong> 複数の耐性変異に効果を示し、脳転移への効果も高い薬剤です。" },
+            { "id": 190, "category": 6, "question": "胸腺腫の進展度を示す正岡分類で、胸膜や心膜への「播種」が認められる場合は何期か？", "answer": "<strong>答え:</strong> IVa期<br><strong>解説:</strong> 周囲臓器への「肉眼的浸潤」はIII期、 遠隔転移はIVb期となります。" },
+            { "id": 191, "category": 6, "question": "胸水の性状検査で乳び胸と診断する、中性脂肪(TG)の値の基準は？", "answer": "<strong>答え:</strong> 110 mg/dL以上<br><strong>解説:</strong> 胸管の閉塞や損傷により、リンパ液（乳び）が胸腔に漏出する病態です。悪性リンパ腫が原因として最多です。" },
+            { "id": 192, "category": 6, "question": "気管支原発の悪性腫瘍の組織型で頻度が高い順に並べよ。（Sq, ACC, SCLC, カルチノイド, 粘表皮癌）", "answer": "<strong>答え:</strong> 扁平上皮癌(Sq) > 腺様嚢胞癌(ACC) > 粘表皮癌 > カルチノイド > 小細胞癌(SCLC)" },
+            { "id": 193, "category": 6, "question": "術後補助療法として、EGFR遺伝子変異陽性の完全切除後NSCLC患者にオシメルチニブを3年間投与する治療法の有効性を示した試験名は？", "answer": "<strong>答え:</strong> ADAURA試験" },
+            { "id": 194, "category": 6, "question": "切除不能III期EGFR陽性NSCLCで、CCRT（化学放射線療法）後の維持療法としてオシメルチニブの有効性を示した試験名は？", "answer": "<strong>答え:</strong> LAURA試験" },
+            { "id": 195, "category": 6, "question": "胸腺腫のWHO分類において、正常胸腺に最も組織像が近いとされる型はどれか？", "answer": "<strong>答え:</strong> B1型<br><strong>解説:</strong> B1型はリンパ球が豊富で、腫瘍性の上皮細胞がまばらに存在する、正常胸腺に近い組織像を示します。" },
+            { "id": 196, "category": 6, "question": "胸管損傷による乳び胸で、損傷部位が第5胸椎(Th5)より下の場合、胸水は左右どちらに溜まりやすいか？", "answer": "<strong>答え:</strong> 右側<br><strong>解説:</strong> 胸管は腹部から上行し、Th5あたりで正中を越えて左側へ移動します。そのため、Th5より下での損傷は右側に、上での損傷は左側に胸水が溜まりやすくなります。" },
+            { "id": 197, "category": 6, "question": "悪性中皮腫の診断補助に用いられる血清マーカーと、胸水中での測定が有用な物質は何か？", "answer": "<strong>答え:</strong> 【血清】SMRP（可溶性メソテリン関連ペプチド）<br>【胸水】ヒアルロン酸" },
+            { "id": 198, "category": 6, "question": "炎症性偽腫瘍（炎症性筋線維芽細胞腫）において、約半数で認められる遺伝子異常は？", "answer": "<strong>答え:</strong> ALK融合遺伝子<br><strong>解説:</strong> 腫瘍性の炎症性偽腫瘍はALK陽性であることが多く、中間悪性腫瘍と位置づけられています。ALK阻害薬が有効な場合があります。" },
+            { "id": 199, "category": 6, "question": "悪性中皮腫の診断において、良性の反応性中皮細胞との鑑別に有用なマーカー（発現消失）は何か？", "answer": "<strong>答え:</strong> BAP1<br><strong>解説:</strong> 悪性中皮腫ではがん抑制遺伝子であるBAP1のタンパク発現が消失していることが多く、良性病変との鑑別に極めて有用なマーカーです。" },
+            { "id": 200, "category": 6, "question": "肺癌のTNM分類において、同一肺葉内のサテライト結節や肋骨への直接浸潤は、T分類で何に相当するか？", "answer": "<strong>答え:</strong> T3<br><strong>解説:</strong> これらはT4（同一肺の異なる肺葉への転移など）やM1（遠隔転移）とは区別される、局所進行を示す重要なT因子です。" },
+            { "id": 201, "category": 6, "question": "DLL3を標的とするBiTE（二重特異性T細胞誘導）抗体で、再発・難治性の小細胞肺癌に有効性が示された薬剤は何か？また、主な副作用は？", "answer": "<strong>答え:</strong> 薬剤：タルラタマブ<br>副作用：サイトカイン放出症候群(CRS) (50%以上)<br><strong>解説:</strong> 小細胞癌の新たな治療選択肢として期待される薬剤ですが、免疫を賦活することによるCRSのマネジメントが重要となります。" },
+            { "id": 202, "category": 6, "question": "胸腺腫に関連する免疫不全症候群（低ガンマグロブリン血症、CD4低下、B細胞欠損）を何というか？", "answer": "<strong>答え:</strong> Good症候群<br><strong>解説:</strong> 胸腺腫患者の約10%に合併し、重篤な日和見感染症により予後不良となることがあります。" },
+            { "id": 203, "category": 6, "question": "肺腺癌と大腸癌の鑑別のための免疫染色で、CK7とCK20の染まり方の違いは？", "answer": "<strong>答え:</strong> 肺腺癌：CK7陽性、CK20陰性<br>大腸癌：CK7陰性、CK20陽性<br><strong>解説:</strong> この逆のパターンは、転移性腺癌の原発巣を推定する上で非常に有用な所見です。" },
+            { "id": 204, "category": 6, "question": "肺の硬化性血管腫（現在は硬化性肺胞上皮腫と呼ばれる）が好発する性別と年齢層は？", "answer": "<strong>答え:</strong> 40～50歳代の女性（男女比 1:4）<br><strong>解説:</strong> 境界明瞭な類円形の結節影を呈する良性腫瘍ですが、充実性部分を持つため肺癌との鑑別が必要になります。" },
+            { "id": 205, "category": 6, "question": "自然気胸の再発率はどのくらいか？また、男女どちらに多いか？", "answer": "<strong>答え:</strong> 再発率：10～30%<br>性差：男性が女性の4～6倍多い" },
+            { "id": 206, "category": 6, "question": "肺のMALTリンパ腫で最も多く見られる遺伝子異常は何か？", "answer": "<strong>答え:</strong> t(11;18)(q21;q21)転座<br><strong>解説:</strong> この遺伝子転座はMALTリンパ腫に特異性が高く、診断の一助となります。" },
+            { "id": 207, "category": 6, "question": "悪性中皮腫の診断で、良性の反応性中皮細胞との鑑別に有用な免疫染色マーカー（desmin）の染まり方の違いは？", "answer": "<strong>答え:</strong> desminは、非腫瘍性の中皮細胞では80%で陽性になるが、悪性中皮腫では陽性率が10%に低下する。<br><strong>解説:</strong> 腫瘍化に伴いdesminの発現が低下する性質を利用した鑑別法です。BAP1の発現消失と並行して評価されます。" },
+            { "id": 208, "category": 6, "question": "びまん性胸膜肥厚の原因として、多くの場合に先行する病態は何か？", "answer": "<strong>答え:</strong> 良性石綿胸水<br><strong>解説:</strong> 石綿曝露後に胸水が貯留し、それが吸収される過程で臓側胸膜と壁側胸膜が癒着・肥厚することで、びまん性胸膜肥厚に至ることが多いとされています。" },
+            { "id": 209, "category": 6, "question": "胸腺腫WHO分類において、紡錘形〜卵円形の上皮細胞から構成され、リンパ球をほとんど含まない型はどれか？", "answer": "<strong>答え:</strong> Type A<br><strong>解説:</strong> Type Aは最も悪性度の低い組織型とされています。上皮細胞の形態とリンパ球の量で分類されるWHO分類の基本を理解することが重要です。" },
+            { "id": 210, "category": 6, "question": "悪性中皮腫の発がん性が最も強いとされるアスベストの種類は何か？", "answer": "<strong>答え:</strong> 青石綿（クロシドライト）<br><strong>解説:</strong> アスベストには数種類ありますが、中でもクロシドライトは発がん性が極めて高く、現在は製造・使用が全面的に禁止されています。" },
+            { "id": 211, "category": 6, "question": "メトトレキサート（MTX）関連リンパ増殖性疾患において、最も多い病理組織型は何か？", "answer": "<strong>答え:</strong> びまん性大細胞型B細胞リンパ腫（DLBCL）<br><strong>解説:</strong> MTXなどの免疫抑制状態を背景に発症するリンパ腫であり、原因薬剤の中止で軽快することもあります。" },
+            { "id": 212, "category": 6, "question": "肺過誤腫について、発生部位の頻度（肺野 vs 気管支内）と、悪性化の可能性について述べよ。", "answer": "<strong>答え:</strong> 【発生部位】9割が肺野、1割が気管支内<br>【悪性化】極めて稀だが、悪性化の報告もある<br><strong>解説:</strong> 肺の良性腫瘍では最多ですが、脂肪成分を含まない場合などは悪性腫瘍との鑑別が必要になります。" },
+            { "id": 213, "category": 6, "question": "進行肺癌による気道狭窄に対して、症状緩和を目的として行われる内視鏡治療は何か？", "answer": "<strong>答え:</strong> 光線力学療法（PDT）<br><strong>解説:</strong> PDTは早期肺癌の根治治療だけでなく、進行癌による気道閉塞を解除し、呼吸困難などの症状を和らげる緩和的治療としても有効です。" },
+            { "id": 214, "category": 6, "question": "胸腺癌の治療薬として承認されている分子標的薬は何か？", "answer": "<strong>答え:</strong> レンバチニブ<br><strong>解説:</strong> レンバチニブは血管新生阻害作用などを持つマルチキナーゼ阻害薬であり、切除不能な胸腺癌に対する治療選択肢の一つです。" },
+            { "id": 215, "category": 6, "question": "縦隔に発生する神経原性腫瘍の最も多い由来と、成人における悪性度の傾向は？", "answer": "<strong>答え:</strong> 【由来】肋間神経由来が多い<br>【悪性度】成人では良性が多い<br><strong>解説:</strong> 後縦隔に好発する腫瘍であり、多くは神経鞘腫などの良性腫瘍です。" },
+            { "id": 216, "category": 6, "question": "EGFR Ex20 ins遺伝子変異陽性の進行・再発非小細胞肺癌の一次治療として、アミバンタマブと併用される化学療法レジメンは何か？", "answer": "<strong>答え:</strong> カルボプラチン + ペメトレキセド<br><strong>解説:</strong> アミバンタマブ（EGFR/MET二重特異性抗体）と化学療法を併用することで、オシメルチニブ耐性後の治療選択肢だけでなく、一次治療としての有効性も示されています。" },
+            { "id": 217, "category": 6, "question": "胸水の性状が乳び（乳白色）である乳び胸に対し、保存的治療として用いられるソマトスタチンアナログは何か？", "answer": "<strong>答え:</strong> オクトレオチド<br><strong>解説:</strong> オクトレオチドは消化管からの脂肪吸収とリンパ流を抑制することで、胸管からの乳びの漏出を減少させる効果が期待されます。" },
+            { "id": 218, "category": 6, "question": "肺の原発性MALTリンパ腫の治療で推奨される標準的な化学療法レジメンは何か？", "answer": "<strong>答え:</strong> R-CHOP療法<br><strong>解説:</strong> R-CHOP（リツキシマブ、シクロホスファミド、ドキソルビシン、ビンクリスチン、プレドニゾロン）は、B細胞性リンパ腫に対する標準的な治療法です。" },
+            { "id": 219, "category": 6, "question": "石綿肺（アスベストーシス）が発症するまでの、曝露開始からの典型的な潜伏期間はどのくらいか？", "answer": "<strong>答え:</strong> 10～20年<br><strong>解説:</strong> 長期間の潜伏期間を経て発症するのが特徴です。そのため、過去の職歴聴取が診断において非常に重要となります。" },
+            { "id": 220, "category": 6, "question": "EGFR exon20挿入変異陽性肺癌に使用されるアミバンタマブの薬剤クラス（作用機序）は何か？", "answer": "<strong>答え:</strong> EGFR/c-MET二重特異性抗体<br><strong>解説:</strong> 1つの抗体がEGFRとc-METという2つの異なる標的に結合し、両方のシグナルを阻害することで効果を発揮します。" },
+            { "id": 221, "category": 6, "question": "第3世代EGFR-TKIであるラゼルチニブが標的とする、重要な耐性遺伝子変異は何か？", "answer": "<strong>答え:</strong> T790M変異<br><strong>解説:</strong> 第1・2世代EGFR-TKIで最も多い耐性化のメカニズムであるT790M変異を克服するために開発された薬剤の一つです。" },
+            { "id": 222, "category": 6, "question": "肺癌の化学療法において、癌性リンパ管症はTNM分類上どのように扱われるか？", "answer": "<strong>答え:</strong> 肺葉内転移と同様の扱い(肺癌取扱い規約における記載)<br><strong>解説:</strong> 同一肺葉内に限局していればT3、同側の異なる肺葉にあればT4、対側肺にあればM1aと、その拡がりに応じて分類されます。" },
+            { "id": 223, "category": 6, "question": "IPF（特発性肺線維症）患者において、原発性肺癌を合併する割合はどのくらいか？", "answer": "<strong>答え:</strong> 10〜30%です 。" },
+            { "id": 224, "category": 6, "question": "扁平上皮癌（Sq）の免疫染色で陽性となるマーカーを3つ挙げよ。", "answer": "<strong>答え:</strong> p40、p63、CK5/6が陽性となります 。" },
+            { "id": 225, "category": 6, "question": "小細胞肺癌（SCLC）の免疫染色で陽性となるマーカーを3つ挙げよ。", "answer": "<strong>答え:</strong> CD56 (NCAM)、クロモグラニンA、シナプトフィジンが陽性となります。" },
+            { "id": 226, "category": 6, "question": "内視鏡的治療の対象となる早期肺癌の基準を挙げよ。", "answer": "<strong>答え:</strong> 胸部X線で異常がなく、遠隔転移がなく、以下の内視鏡的基準を満たす扁平上皮癌です：<br>・病変が気管から亜区域気管支までに限局<br>・末梢辺縁が内視鏡で確認できる<br>・病巣の長径が2cm以下" },
+            { "id": 227, "category": 6, "question": "STASとは何か？また、どのような組織型で高頻度に見られ、何の予測因子となるか？", "answer": "<strong>答え:</strong> STAS: Spread Through Air Spacesの略で、気腔内散布様式を指します。<br>特徴: 微小乳頭型（Micropapillary）および充実型（Solid）で高頻度に見られ、局所再発の予測因子となります 。" },
+            { "id": 228, "category": 6, "question": "胸腺腫に重症筋無力症が合併する割合はどのくらいか？", "answer": "<strong>答え:</strong> 2〜3割です 。" },
+            { "id": 229, "category": 6, "question": "縦隔原発のセミノーマと非セミノーマについて、好発年齢と予後の違いは？", "answer": "<strong>答え:</strong> 非セミノーマ: 縦隔原発の場合は一般的に予後不良なことが多いです 。<br>セミノーマ: 20〜40歳代に多く、比較的予後良好です。" },
+            { "id": 230, "category": 6, "question": "孤立性線維性腫瘍（SFT）について、好発部位、画像上の特徴、悪性化の頻度を述べよ。", "answer": "<strong>答え:</strong> 好発部位: 2/3が臓側胸膜からの発生です 。<br>画像特徴: 境界明瞭で、有茎性であり可動性を伴うことがあります 。<br>悪性化: 年間12〜37%が悪性化すると報告されています 。" },
+            { "id": 231, "category": 7, "question": "ARDSの重症度を規定するベルリン定義において、「重症(severe)」と判断する酸素化の基準は？", "answer": "<strong>答え:</strong> PaO2/FiO2 ≦ 100 mmHg (PEEP ≧ 5 cmH2O下)<br><strong>解説:</strong> 軽症は200 < P/F比 ≦ 300、中等症は100 < P/F比 ≦ 200と分類されます。" },
+            { "id": 232, "category": 7, "question": "放射線治療の計画において、肺臓炎のリスク指標となるV20の推奨上限値は？", "answer": "<strong>答え:</strong> 35%以下<br><strong>解説:</strong> V20とは「正常肺全体のうち20Gy以上照射される体積の割合」を指し、これが35%を超えないように計画することが推奨されています。40%以上で重症肺臓炎のリスクが上がります。" },
+            { "id": 233, "category": 7, "question": "バラコート中毒の治療において、原則禁忌とされる処置は何か？", "answer": "<strong>答え:</strong> 酸素投与<br><strong>解説:</strong> バラコートは体内で活性酸素を大量に産生して肺障害を引き起こします。酸素投与は、この活性酸素の産生をさらに増強させてしまうため、可能な限り制限します。\tBLMやアミオダロンも同様" },
+            { "id": 234, "category": 7, "question": "ARDSの新グローバル定義(2024)で、非侵襲的換気下の患者を診断するために導入された、PaO2/FiO2の代替となる指標は？", "answer": "<strong>答え:</strong> SpO2/FiO2 ≦ 315<br><strong>解説:</strong> SpO2が97%以下の場合、この指標を用いてPaO2/FiO2 ≦ 300と同等とみなし、非挿管患者でも早期にARDSを診断できるようになりました。" },
+            { "id": 235, "category": 7, "question": "放射線治療の際、脊髄の耐容線量は何Gyか？", "answer": "<strong>答え:</strong> 50Gy<br><strong>解説:</strong> 脊髄に50Gy以上の線量が照射されると、放射線脊髄症のリスクが著しく増加するため、これを越えないように治療計画を立てる必要があります。" },
+            { "id": 236, "category": 7, "question": "OK-432（ピシバニールⓇ）は何をどのように処理して作られた製剤か？また、そのためにアレルギーで禁忌となるのは何か？", "answer": "<strong>答え:</strong> 溶血性連鎖球菌をペニシリンで処理して作成<br>【禁忌】ペニシリンアレルギー<br><strong>解説:</strong> 免疫賦活作用を利用して、癌性胸膜炎の治療（胸膜癒着術）などに用いられます。" },
+            { "id": 237, "category": 7, "question": "放射線肺臓炎において、放射線感受性が高いのは1型肺胞上皮細胞と2型肺胞上皮細胞のどちらか？", "answer": "<strong>答え:</strong> 2型肺胞上皮細胞<br><strong>解説:</strong> 幹細胞の役割を持つ2型肺胞上皮細胞が障害されることで、肺胞の修復が妨げられ、線維化へと進展します。" },
+            { "id": 238, "category": 7, "question": "放射線治療において、正常肺の晩期障害を規定する線量と関連が深いのは、1回線量と総線量のどちらか？", "answer": "<strong>答え:</strong> 1回線量<br><strong>解説:</strong> 正常組織の耐容線量は、1回線量が大きいほど許容できる総線量が少なくなります。これが分割照射を行う理由の一つです。" },
+            { "id": 239, "category": 7, "question": "閉塞性睡眠時無呼吸(OSAS)患者で、CPAP療法の目標とされる1夜あたりの最低使用時間は？", "answer": "<strong>答え:</strong> 4時間以上<br><strong>解説:</strong> 毎晩4時間以上の使用が、生命予後や日中の眠気の改善に繋がるとされており、アドヒアランス向上のための指導が重要です。" },
+            { "id": 240, "category": 7, "question": "化学放射線療法（CCRT）中にG-CSFの使用が推奨されないのは、照射野にどの部位が含まれる場合か？またその理由は？", "answer": "<strong>答え:</strong> 【部位】縦隔<br>【理由】血小板減少のリスクが増加するため<br><strong>解説:</strong> 縦隔には骨髄（胸骨など）が含まれるため、放射線照射とG-CSFの併用により骨髄抑制、特に血小板減少が強く出ることが知られています。" },
+            { "id": 241, "category": 7, "question": "放射線感受性を増強させ、放射線肺臓炎のリスクを高めることが知られている抗がん剤を4つ挙げよ。", "answer": "<strong>答え:</strong> ブレオマイシン(BLM)、シクロホスファミド(CPA)、メトトレキサート(MTX)、ゲムシタビン(GEM)<br><strong>解説:</strong> これらの薬剤を使用中、あるいは使用歴がある患者に胸部放射線治療を行う際は、肺臓炎の発症に特に注意が必要です。" },
+            { "id": 242, "category": 7, "question": "閉塞性睡眠時無呼吸(OSAS)患者で、肥満を伴わない日本人の割合はどのくらいか？", "answer": "<strong>答え:</strong> 約4分の1<br><strong>解説:</strong> 欧米では肥満がOSASの主たる原因ですが、日本人では顎が小さいなどの骨格的な要因も大きく、非肥満でもOSASを発症する患者が多いのが特徴です。" },
+            { "id": 243, "category": 7, "question": "過換気症候群で起こりうる、致死的となりうる合併症は何か？", "answer": "<strong>答え:</strong> 過換気後の無呼吸発作による低酸素血症<br><strong>解説:</strong> 過換気により血中のCO2が極端に低下すると、呼吸中枢が抑制されて無呼吸となります。この無呼吸が遷延すると重篤な低酸素血症をきたす危険性があります。" },
+            { "id": 244, "category": 7, "question": "肺移植の適応疾患として、COPDや間質性肺炎以外に、どのような希少疾患が挙げられるか？", "answer": "<strong>答え:</strong> リンパ脈管筋腫症(LAM)、肺動脈性肺高血圧症(PAH)、嚢胞性線維症(CF) など<br><strong>解説:</strong> これらの疾患は内科的治療に限界があり、呼吸不全が進行した場合には肺移植が唯一の治療選択肢となることがあります。" },
+            { "id": 245, "category": 7, "question": "OSAS患者に対する外科治療の一つである、口蓋垂軟口蓋咽頭形成術の略称は何か？", "answer": "<strong>答え:</strong> UPPP (Uvulo-palato-pharyngo-plasty)<br><strong>解説:</strong> CPAP治療が困難な場合や、特定の解剖学的異常がある場合に行われる、咽頭を拡大する手術です。" },
+            { "id": 246, "category": 7, "question": "Permissive hypercapnia（許容的高二酸化炭素血症）において、高CO2を許容するpHの基準は？", "answer": "<strong>答え:</strong> pHが7.25以上であることが基準です。" },
+            { "id": 247, "category": 7, "question": "PM2.5の環境基準について、日本の基準（1年平均/1日平均）は？", "answer": "<strong>答え:</strong> 1年平均値は15µg/m³以下、かつ1日平均値は35µg/m³以下です 。" },
+            { "id": 248, "category": 7, "question": "OSASの重症度分類において、中等症と判断されるAHI（無呼吸低呼吸指数）の範囲は？", "answer": "<strong>答え:</strong> AHI 15〜30が中等症です。" },
+            { "id": 249, "category": 7, "question": "減量目的の胃切除術の適応基準は？", "answer": "<strong>答え:</strong> BMIが35以上で、かつ内科的治療が不十分な場合です。" },
+            { "id": 250, "category": 7, "question": "乳び「状」胸水（コレステロール胸水）について、原因、成り立ち、乳び胸との鑑別点を述べよ。", "answer": "<strong>答え:</strong> 原因: 関節リウマチ（RA）や結核（Tb）などの慢性炎症に続発します 。<br>成り立ち: 赤血球や白血球が溶解し、コレステロールが蓄積して生じます 。<br>鑑別点: （真性）乳び胸と異なり、カイロミクロンは増加しません。" },
+            { "id": 251, "category": 8, "question": "薬剤性肺高血圧症（PAH）を引き起こす代表的な薬剤を2つ挙げてください。", "answer": "<strong>答え:</strong> ダサチニブ、フェンフルラミン<br><strong>解説:</strong> ダサチニブは慢性骨髄性白血病（CML）治療薬、フェンフルラミンは食欲抑制薬です 。" },
+            { "id": 252, "category": 8, "question": "遺伝性肺高血圧症（PAH）の原因となる遺伝子変異を3つ挙げてください。", "answer": "<strong>答え:</strong> BMPR2、ALK1、Endoglin<br><strong>解説:</strong> これらの遺伝子変異が遺伝性PAHの背景にあることが知られています 。" },
+            { "id": 253, "category": 8, "question": "肺高血圧症（PAH）を合併することがある全身性疾患を3つ挙げてください。", "answer": "<strong>答え:</strong> 結合組織病（CTD）、HIV感染症、門脈圧亢進症<br><strong>解説:</strong> その他、先天性心疾患や住血吸虫症などもPAHの原因となります 。" },
+            { "id": 254, "category": 8, "question": "PAHの病態における一酸化窒素（NO）の役割と、関連する治療薬の作用機序を説明してください。", "answer": "<strong>答え:</strong> NOは血管平滑筋を弛緩させますが、PAHではその産生が低下しています 。<br><strong>解説:</strong> 治療薬のPDE-5阻害薬（シルデナフィル等）は、血管弛緩作用を持つcGMPの分解を防ぎ 、sGC刺激薬（リオシグアト）はcGMPの産生を直接促進します 。" },
+            { "id": 255, "category": 8, "question": "PAHの病態におけるエンドセリン（ET-1）の役割と、関連する治療薬の作用機序を説明してください。", "answer": "<strong>答え:</strong> ET-1は強力な血管収縮作用を持ち、PAHではその発現が亢進しています 。<br><strong>解説:</strong> エンドセリン受容体拮抗薬（ボセンタン等）は、ET-1が受容体に結合するのを阻害し、血管収縮を抑制します 。" },
+            { "id": 256, "category": 8, "question": "PAHの病態におけるプロスタサイクリン（PGI2）の役割と、関連する治療薬の作用機序を説明してください。", "answer": "<strong>答え:</strong> PGI2は血管平滑筋を弛緩させますが、PAHではその産生が低下しています 。<br><strong>解説:</strong> PGI2誘導体（ベラプロスト等）やIP受容体作動薬（セレキシパグ）は、この経路を活性化させて血管を弛緩させます 。" },
+            { "id": 257, "category": 8, "question": "エンドセリン受容体拮抗薬に分類されるPAH治療薬を2つ挙げてください。", "answer": "<strong>答え:</strong> ボセンタン（トラクリア）、マシテンタン（オプスミット）、アンブリセンタン（ヴォリブリス）<br><strong>解説:</strong> 全て経口薬です 。近年ではマシテンタンの使用が増えています 。" },
+            { "id": 258, "category": 8, "question": "ホスホジエステラーゼ5（PDE-5）阻害薬に分類されるPAH治療薬を2つ挙げてください。", "answer": "<strong>答え:</strong> シルデナフィル（レバチオ）、タダラフィル（アドシルカ）<br><strong>解説:</strong> cGMPの分解を抑制し、NO経路の血管拡張作用を増強します 。" },
+            { "id": 259, "category": 8, "question": "プロスタサイクリン（PGI2）経路に作用する経口薬を2種類挙げてください。", "answer": "<strong>答え:</strong> ベラプロストナトリウム（PGI2誘導体）、セレキシパグ（IP受容体作動薬）<br><strong>解説:</strong> ベラプロストは第一選択になりにくく 、セレキシパグは選択的IP受容体作動薬です 。" },
+            { "id": 260, "category": 8, "question": "可溶性グアニル酸シクラーゼ（sGC）刺激薬に分類されるPAH治療薬は何ですか？", "answer": "<strong>答え:</strong> リオシグアト（アデムパス）<br><strong>解説:</strong> NOの作用に頼らず直接sGCを刺激し、cGMP産生を促す新しい機序の薬剤です 。" },
+            { "id": 261, "category": 8, "question": "肺性心でみられる心電図所見と、特徴的な心雑音を挙げてください。", "answer": "<strong>答え:</strong> 心電図：肺性P波 。心雑音：Graham Steel雑音（拡張早期逆流性雑音） 。<br><strong>解説:</strong> 右心系の負荷増大により、右房負荷（肺性P波）や肺動脈弁閉鎖不全（Graham Steel雑音）が生じます 。" },
+            { "id": 262, "category": 8, "question": "神経原性肺水腫の原因は何ですか？", "answer": "<strong>答え:</strong> くも膜下出血（SAH）などの頭部外傷<br><strong>解説:</strong> 交感神経系の活動が亢進し、肺毛細血管圧が急上昇することで発症します 。" },
+            { "id": 263, "category": 8, "question": "強皮症（SSc）に伴うPAHの治療で、他の膠原病と異なる点は何ですか？", "answer": "<strong>答え:</strong> 免疫抑制剤の効果が期待しにくいため、肺血管拡張薬を使用します 。<br><strong>解説:</strong> SScに伴うPAHは血管内膜の肥厚が主体であり、炎症が少ないため、血管拡張が治療の中心となります 。" },
+            { "id": 264, "category": 8, "question": "慢性血栓塞栓性肺高血圧症（CTEPH）は、いつ診断されますか？", "answer": "<strong>答え:</strong> 急性肺塞栓症に対し適切な抗凝固療法を3〜6ヶ月行っても、肺高血圧症（PH）が残存する場合 。<br><strong>解説:</strong> 急性PEの数%が慢性化しCTEPHになると言われています 。" },
+            { "id": 265, "category": 8, "question": "CTEPHの治療に用いられる抗凝固薬で、エビデンスが確立されているものは何ですか？", "answer": "<strong>答え:</strong> ワーファリン<br><strong>解説:</strong> 生涯にわたる抗凝固療法が必要とされます 。" },
+            { "id": 266, "category": 8, "question": "CTEPHに適応がある唯一の肺血管拡張薬は何ですか？", "answer": "<strong>答え:</strong> リオシグアト<br><strong>解説:</strong> 手術非適応または術後残存/再発のCTEPHに使用されるsGC刺激薬です 。" },
+            { "id": 267, "category": 8, "question": "遺伝性出血性末梢血管拡張症（HHT）で、肺動静脈瘻（AVM）がある場合に禁止されることは何ですか？", "answer": "<strong>答え:</strong> スキューバダイビング<br><strong>解説:</strong> 減圧時に生じた気泡がシャントを介して脳に達し、脳梗塞を起こすリスクがあるためです 。" },
+            { "id": 268, "question": "MAC抗体（抗-GPL-core IgA）で偽陽性を示す菌種", "answer": "主に迅速発育NTM：GPL-core抗原に類似構造を持つ、M. abscessus, M. chelonae, M. fortuitum", "category": 3 },
+            { "id": 269, "question": "吸気時に障害のある肺（患側）から健康な肺（健側）へ空気が移動する呼吸様式を何と呼びますか？", "answer": "回答: 振り子呼吸 <br> 解説: 結核後遺症などで見られる特徴的な呼吸パターンです。", "category": 2 },
+            { "id": 270, "question": "吸入トレプロスチニルが適応となる疾患と、その有効性を示した臨床試験名は何ですか？", "answer": "回答: 適応疾患：PAHとPH-ILD。臨床試験：INCREASE試験。 <br> 解説: INCREASE試験では、6分間歩行距離（6MWD）の有意な改善と、入院などの臨床的悪化を抑制する効果が示されました 。", "category": 8 },
+            { "id": 271, "question": "特発性肺線維症（IPF）の患者が原発性肺癌を合併する頻度はどのくらいですか？", "answer": "回答: 10～30% <br> 解説: IPFは肺癌の重要なリスク因子の一つです。", "category": 5 },
+            { "id": 272, "question": "多発血管炎性肉芽腫症（GPA）でみられる特徴的な上気道の症状は何ですか？", "answer": "回答: 有痛性または無痛性の口腔内潰瘍、化膿性または血性の鼻汁。 <br> 解説: GPAはANCA関連血管炎の一つで、上気道、肺、腎臓に病変をきたしやすい疾患です。", "category": 5 },
+            { "id": 273, "question": "顕微鏡的多発血管炎（MPA）において、臓器障害が起こりやすい順序は？", "answer": "回答: 腎臓 > 肺 ≧ 神経 <br> 解説: MPAもANCA関連血管炎ですが、GPAと異なり肉芽腫を形成しない点が特徴です。", "category": 5 },
+            { "id": 274, "question": "抗合成酵素（ARS）抗体症候群で最も頻度の高い自己抗体は何ですか？", "answer": "回答: Jo-1抗体 <br> 解説: ARS抗体は現在8種類知られていますが、Ro-52抗体はこの中には含まれません。", "category": 5 },
+            { "id": 275, "question": "超硬合金肺の原因物質と病理学的特徴は何ですか？", "answer": "回答: 原因：主にコバルト。病理：巨細胞性間質性肺炎。 <br> 解説: タングステンとコバルトの混合物を扱う労働者に発生し、暴露期間よりも個人の感受性が発症に関与します。", "category": 5 },
+            { "id": 276, "question": "溶接工肺（じん肺）の病理学的特徴を3つ挙げてください。", "answer": "回答: 鉄（Fe）、フェリチン、肺胞ヘモジデリン貪食マクロファージ。 <br> 解説: 溶接時に発生するヒュームの吸入が原因で、新規に発生するじん肺の中では最も多いとされています。", "category": 5 },
+            { "id": 277, "question": "インジウムへの暴露によって引き起こされる可能性のある呼吸器疾患を2つ挙げてください。", "answer": "間質性肺炎（ILD）、続発性肺胞蛋白症（PAP）。 <br> 解説: インジウムは液晶パネルなどの製造に用いられるレアメタルです。", "category": 5 },
+            { "id": 278, "question": "胸腺腫の正岡分類において、ステージIとステージIIの違いは何ですか？", "answer": "回答: ステージI：被膜浸潤なし。ステージII：被膜浸潤あり。 <br> 解説: ステージIIはさらに、顕微鏡的な浸潤のみ（IIA）と、肉眼的に周囲脂肪組織や胸膜へ浸潤しているもの（IIB）に分けられます。", "category": 6 },
+            { "id": 279, "question": "EGFR遺伝子変異陽性肺癌に対する「アミバンタマブ＋ラゼルチニブ」併用療法の有効性は？（MARIPOSA試験）", "answer": "回答: オシメルチニブ単独療法と比較して、無増悪生存期間（PFS）を有意に延長させます。 <br> 解説: PFS中央値は23.7ヶ月対16.6ヶ月で、全生存期間（OS）の改善傾向も確認されています。", "category": 6 },
+            { "id": 280, "question": "小細胞肺癌（LD-SCLC）において、予防的全脳照射（PCI）が推奨されるのはどのような場合ですか？", "answer": "回答: 初回治療で完全奏効（CR）が得られた症例。 <br> 解説: 治療終了後6ヶ月以内の開始が望ましく、総線量25Gyが推奨されます。", "category": 6 },
+            { "id": 281, "question": "末梢型の深部静脈血栓症（DVT）はどのような場合に経過観察が選択されますか？", "answer": "回答: 無症候性で低リスク、かつ2週間以内に中枢側への進展が見られない場合。 <br> 解説: 2週間進展がなければ、その後の進展リスクは低いとされています。", "category": 8 }
+        ];
+        
+        // --- アプリケーションのロジック ---
+        let allQuestions = []; // Firestoreから取得した全問題
+        let filteredQuestions = []; // 表示対象の問題
+        let currentQuestionIndex = 0;
+        let weaknessList = []; // 苦手リストは引き続きローカルストレージで管理
+
+        const categories = {
+            1: '形態・生理・疫学', 2: '診察・検査', 3: '感染症', 4: '閉塞性肺疾患・アレルギー', 
+            5: '間質性肺疾患・希少疾患', 6: '腫瘍', 7: '呼吸不全・その他', 8: '肺血管疾患'
+        };
+
+        const elements = {
+            flashcard: document.getElementById('flashcard'),
+            cardFront: document.getElementById('card-front'),
+            cardBack: document.getElementById('card-back'),
+            prevBtn: document.getElementById('prev-btn'),
+            nextBtn: document.getElementById('next-btn'),
+            flipBtn: document.getElementById('flip-btn'),
+            randomBtn: document.getElementById('random-btn'),
+            progressEl: document.getElementById('progress'),
+            categoryFiltersEl: document.getElementById('category-filters'),
+            searchInput: document.getElementById('search'),
+            weaknessBtn: document.getElementById('weakness-btn'),
+            addBtn: document.getElementById('add-btn'),
+            editBtn: document.getElementById('edit-btn'),
+            deleteBtn: document.getElementById('delete-btn'),
+            exportBtn: document.getElementById('export-btn'),
+            modal: document.getElementById('edit-modal'),
+            modalTitle: document.getElementById('modal-title'),
+            modalCancelBtn: document.getElementById('modal-cancel-btn'),
+            editForm: document.getElementById('edit-form'),
+            modalQuestionId: document.getElementById('modal-question-id'),
+            modalQuestion: document.getElementById('modal-question'),
+            modalAnswer: document.getElementById('modal-answer'),
+            modalCategory: document.getElementById('modal-category'),
+            totalQuestionsDisplay: document.getElementById('total-questions-display')
+        };
+
+        function init() {
+            setupFirestoreListener();
+            loadWeaknessList();
+            createCategoryButtons();
+            populateCategorySelect();
+            addEventListeners();
+        }
+
+        function setupFirestoreListener() {
+            onSnapshot(questionsCollection, (snapshot) => {
+                if (snapshot.empty) {
+                    elements.totalQuestionsDisplay.textContent = "初期データを投入中...";
+                    populateInitialData();
+                    return;
+                }
+                
+                allQuestions = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+
+                elements.totalQuestionsDisplay.textContent = `全${allQuestions.length}問 - 知識の定着にご活用ください`;
+                elements.searchInput.disabled = false;
+                
+                const activeCategory = document.querySelector('.category-btn.active')?.dataset.category || 'all';
+                handleFilter(activeCategory);
+
+            }, (error) => {
+                console.error("Firestoreからのデータ読み込みに失敗しました:", error);
+                elements.totalQuestionsDisplay.textContent = "データベース接続エラー";
+            });
+        }
+
+        async function populateInitialData() {
+            try {
+                const batch = writeBatch(db);
+                initialQuestions.forEach(q => {
+                    const { id, ...data } = q; // 元の数値IDは除外する
+                    const docRef = doc(questionsCollection); // FirestoreにIDを自動生成させる
+                    batch.set(docRef, data);
+                });
+                await batch.commit();
+                console.log("初期データの投入が完了しました。");
+            } catch (error) {
+                console.error("初期データの投入に失敗しました:", error);
+            }
+        }
+
+        function loadWeaknessList() {
+            const savedList = localStorage.getItem('respiratoryWeaknessList');
+            weaknessList = savedList ? JSON.parse(savedList) : [];
+        }
+
+        function saveWeaknessList() {
+            localStorage.setItem('respiratoryWeaknessList', JSON.stringify(weaknessList));
+        }
+        
+        function createCategoryButtons() {
+            let buttonsHTML = `<button class="category-btn active px-3 py-1 text-sm rounded-full bg-gray-200 hover:bg-gray-300 transition" data-category="all">すべて</button>`;
+            buttonsHTML += `<button class="category-btn px-3 py-1 text-sm rounded-full bg-gray-200 hover:bg-gray-300 transition" data-category="weak">苦手リスト</button>`;
+            Object.entries(categories).forEach(([id, name]) => {
+                buttonsHTML += `<button class="category-btn px-3 py-1 text-sm rounded-full bg-gray-200 hover:bg-gray-300 transition" data-category="${id}">${name}</button>`;
+            });
+            elements.categoryFiltersEl.innerHTML = buttonsHTML;
+        }
+
+        function populateCategorySelect() {
+            let optionsHTML = '';
+            Object.entries(categories).forEach(([id, name]) => {
+                optionsHTML += `<option value="${id}">${name}</option>`;
+            });
+            elements.modalCategory.innerHTML = optionsHTML;
+        }
+
+        function addEventListeners() {
+            elements.prevBtn.addEventListener('click', showPrevQuestion);
+            elements.nextBtn.addEventListener('click', showNextQuestion);
+            elements.flipBtn.addEventListener('click', flipCard);
+            elements.flashcard.addEventListener('click', flipCard);
+            elements.randomBtn.addEventListener('click', showRandomQuestion);
+            elements.searchInput.addEventListener('input', handleSearch);
+            elements.weaknessBtn.addEventListener('click', toggleWeakness);
+            elements.addBtn.addEventListener('click', handleAddQuestion);
+            elements.editBtn.addEventListener('click', handleEditQuestion);
+            elements.deleteBtn.addEventListener('click', handleDeleteQuestion);
+            elements.exportBtn.addEventListener('click', exportHTML);
+            elements.modalCancelBtn.addEventListener('click', closeModal);
+            elements.editForm.addEventListener('submit', handleSaveQuestion);
+            
+            elements.categoryFiltersEl.addEventListener('click', (e) => {
+                if (e.target.classList.contains('category-btn')) {
+                    const category = e.target.dataset.category;
+                    handleFilter(category);
+                    document.querySelectorAll('.category-btn').forEach(btn => btn.classList.remove('active'));
+                    e.target.classList.add('active');
+                }
+            });
+        }
+
+        function updateDisplay() {
+            if (filteredQuestions.length === 0) {
+                displayNoResults();
+                return;
+            }
+            if (currentQuestionIndex >= filteredQuestions.length) currentQuestionIndex = 0;
+            if (currentQuestionIndex < 0) currentQuestionIndex = filteredQuestions.length - 1;
+
+            const questionData = filteredQuestions[currentQuestionIndex];
+            
+            if (elements.flashcard.classList.contains('is-flipped')) {
+                elements.flashcard.classList.remove('is-flipped');
+                elements.flipBtn.textContent = '答えを見る';
+            }
+
+            setTimeout(() => {
+                elements.cardFront.innerHTML = `<p class="text-gray-500 text-sm mb-4">Category: ${categories[questionData.category]}</p><p class="text-lg md:text-xl font-semibold">${questionData.question}</p>`;
+                elements.cardBack.innerHTML = `<div class="text-left w-full">${questionData.answer}</div>`;
+                elements.progressEl.textContent = `問題 ${currentQuestionIndex + 1} / ${filteredQuestions.length}`;
+                updateWeaknessButtonState(questionData.id);
+            }, 150);
+        }
+
+        function displayNoResults() {
+            elements.cardFront.innerHTML = `<p class="text-lg font-semibold text-gray-500">該当する問題がありません。</p>`;
+            elements.cardBack.innerHTML = '';
+            elements.progressEl.textContent = `問題 0 / 0`;
+            elements.weaknessBtn.classList.remove('active');
+            elements.weaknessBtn.querySelector('svg').setAttribute('fill', 'none');
+        }
+
+        function flipCard() {
+            if (filteredQuestions.length === 0) return;
+            elements.flashcard.classList.toggle('is-flipped');
+            elements.flipBtn.textContent = elements.flashcard.classList.contains('is-flipped') ? '問題に戻る' : '答えを見る';
+        }
+
+        function showNextQuestion() {
+            if (filteredQuestions.length === 0) return;
+            currentQuestionIndex = (currentQuestionIndex + 1) % filteredQuestions.length;
+            updateDisplay();
+        }
+
+        function showPrevQuestion() {
+            if (filteredQuestions.length === 0) return;
+            currentQuestionIndex = (currentQuestionIndex - 1 + filteredQuestions.length) % filteredQuestions.length;
+            updateDisplay();
+        }
+
+        function showRandomQuestion() {
+            if (filteredQuestions.length > 1) {
+                let newIndex;
+                do {
+                    newIndex = Math.floor(Math.random() * filteredQuestions.length);
+                } while (newIndex === currentQuestionIndex);
+                currentQuestionIndex = newIndex;
+                updateDisplay();
+            }
+        }
+
+        function handleSearch(e) {
+            const searchTerm = e.target.value.toLowerCase();
+            filterQuestions(document.querySelector('.category-btn.active').dataset.category, searchTerm);
+        }
+        
+        function handleFilter(category) {
+            const searchTerm = elements.searchInput.value.toLowerCase();
+            filterQuestions(category, searchTerm);
+        }
+
+        function filterQuestions(category, searchTerm = '') {
+            let tempQuestions = [...allQuestions];
+            if (category === 'weak') {
+                tempQuestions = tempQuestions.filter(q => weaknessList.includes(q.id));
+            } else if (category !== 'all') {
+                tempQuestions = tempQuestions.filter(q => q.category == category);
+            }
+            if (searchTerm) {
+                tempQuestions = tempQuestions.filter(q => 
+                    q.question.toLowerCase().includes(searchTerm) || 
+                    q.answer.toLowerCase().includes(searchTerm)
+                );
+            }
+            filteredQuestions = tempQuestions;
+            currentQuestionIndex = 0;
+            updateDisplay();
+        }
+
+        function toggleWeakness() {
+            if (filteredQuestions.length === 0) return;
+            const questionId = filteredQuestions[currentQuestionIndex].id;
+            const index = weaknessList.indexOf(questionId);
+            if (index > -1) {
+                weaknessList.splice(index, 1);
+            } else {
+                weaknessList.push(questionId);
+            }
+            saveWeaknessList();
+            updateWeaknessButtonState(questionId);
+            if (document.querySelector('.category-btn.active').dataset.category === 'weak') {
+                handleFilter('weak');
+            }
+        }
+
+        function updateWeaknessButtonState(questionId) {
+            const svg = elements.weaknessBtn.querySelector('svg');
+            if (weaknessList.includes(questionId)) {
+                elements.weaknessBtn.classList.add('active');
+                svg.setAttribute('fill', '#facc15');
+            } else {
+                elements.weaknessBtn.classList.remove('active');
+                svg.setAttribute('fill', 'none');
+            }
+        }
+
+        function openModal(mode, questionData = null) {
+            elements.editForm.reset();
+            if (mode === 'add') {
+                elements.modalTitle.textContent = '新しい問題を追加';
+                elements.modalQuestionId.value = '';
+            } else {
+                elements.modalTitle.textContent = '問題を修正';
+                elements.modalQuestionId.value = questionData.id;
+                elements.modalQuestion.value = questionData.question;
+                elements.modalAnswer.value = questionData.answer;
+                elements.modalCategory.value = questionData.category;
+            }
+            elements.modal.classList.add('is-open');
+        }
+
+        function closeModal() {
+            elements.modal.classList.remove('is-open');
+        }
+
+        function handleAddQuestion() {
+            openModal('add');
+        }
+
+        function handleEditQuestion() {
+            if (filteredQuestions.length === 0) return;
+            const questionData = filteredQuestions[currentQuestionIndex];
+            openModal('edit', questionData);
+        }
+
+        async function handleDeleteQuestion() {
+            if (filteredQuestions.length === 0) return;
+            const questionToDelete = filteredQuestions[currentQuestionIndex];
+            if (confirm(`問題「${questionToDelete.question.substring(0, 20)}...」を本当に削除しますか？`)) {
+                try {
+                    await deleteDoc(doc(db, 'questions', questionToDelete.id));
+                    
+                    const weakIndex = weaknessList.indexOf(questionToDelete.id);
+                    if (weakIndex > -1) {
+                        weaknessList.splice(weakIndex, 1);
+                        saveWeaknessList();
+                    }
+                    alert('問題を削除しました。');
+                } catch (error) {
+                    console.error("削除中にエラーが発生しました:", error);
+                    alert('問題の削除に失敗しました。');
+                }
+            }
+        }
+
+        async function handleSaveQuestion(e) {
+            e.preventDefault();
+            const id = elements.modalQuestionId.value;
+            const questionData = {
+                question: elements.modalQuestion.value,
+                answer: elements.modalAnswer.value,
+                category: parseInt(elements.modalCategory.value)
+            };
+
+            try {
+                if (id) {
+                    const docRef = doc(db, 'questions', id);
+                    await updateDoc(docRef, questionData);
+                    alert('問題を更新しました。');
+                } else {
+                    await addDoc(questionsCollection, questionData);
+                    alert('問題を追加しました。');
+                }
+                closeModal();
+            } catch (error) {
+                console.error("保存中にエラーが発生しました:", error);
+                alert('問題の保存に失敗しました。');
+            }
+        }
+
+        // --- HTMLエクスポート機能 ---
+        async function exportHTML() {
+            try {
+                const snapshot = await getDocs(questionsCollection);
+                const allDocs = snapshot.docs.map(doc => {
+                    const data = doc.data();
+                    // FirestoreのIDはエクスポートしない
+                    return {
+                        category: data.category,
+                        question: data.question,
+                        answer: data.answer
+                    };
+                });
+                
+                const currentQuestionsString = JSON.stringify(allDocs, null, 4);
+            
+                const pageHTML = document.documentElement.outerHTML;
+                const scriptRegex = /const initialQuestions = \[[\s\S]*?\];/;
+                // 注意: エクスポートされるデータには、元のinitialQuestionsに含まれていたIDは含まれません。
+                const newScriptContent = `const initialQuestions = ${currentQuestionsString};`;
+                const newPageHTML = pageHTML.replace(scriptRegex, newScriptContent);
+
+                const blob = new Blob([newPageHTML], { type: 'text/html' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'flashcard-app-updated.html';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+
+            } catch (error) {
+                console.error("エクスポートデータの取得に失敗しました:", error);
+                alert('エクスポートに失敗しました。');
+            }
+        }
+
+        // --- アプリケーション開始 ---
+        init();
+    </script>
+</body>
+</html>
