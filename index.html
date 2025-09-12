@@ -35,7 +35,6 @@
             <p id="total-questions-display" class="text-gray-500 mt-1">データベースに接続中...</p>
         </header>
 
-        <!-- 機能エリア -->
         <div class="bg-white p-4 rounded-xl shadow-md mb-6">
             <div class="mb-4">
                 <input type="text" id="search" placeholder="キーワードで問題を検索..." class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition" disabled>
@@ -46,7 +45,6 @@
             </div>
         </div>
 
-        <!-- フラッシュカードエリア -->
         <main class="mb-6">
             <div class="flex justify-between items-center mb-4">
                 <div id="progress" class="text-lg font-semibold text-gray-600">問題 0 / 0</div>
@@ -62,7 +60,6 @@
             </div>
         </main>
 
-        <!-- 操作ボタンエリア -->
         <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
             <button id="prev-btn" class="w-full bg-white text-blue-600 font-semibold py-3 px-4 rounded-lg shadow hover:bg-gray-50 transition-colors border border-gray-200">前の問題</button>
             <button id="random-btn" class="w-full bg-white text-blue-600 font-semibold py-3 px-4 rounded-lg shadow hover:bg-gray-50 transition-colors border border-gray-200">ランダム</button>
@@ -70,7 +67,6 @@
             <button id="next-btn" class="w-full bg-blue-500 text-white font-semibold py-3 px-4 rounded-lg shadow hover:bg-blue-600 transition-colors col-span-2 md:col-span-1">次の問題</button>
         </div>
 
-        <!-- 管理機能エリア -->
         <div class="bg-white p-4 rounded-xl shadow-md">
             <h3 class="text-lg font-bold text-gray-700 mb-4 text-center">問題の管理</h3>
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -82,7 +78,6 @@
         </div>
     </div>
 
-    <!-- モーダル (問題追加・修正用) -->
     <div id="edit-modal" class="modal fixed inset-0 bg-black bg-opacity-50 items-center justify-center p-4 z-50">
         <div class="bg-white rounded-xl shadow-2xl p-6 w-full max-w-lg">
             <h2 id="modal-title" class="text-2xl font-bold mb-4"></h2>
@@ -111,7 +106,7 @@
     <script type="module">
         // Firebase SDKのインポート
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-        import { getFirestore, collection, onSnapshot, doc, addDoc, updateDoc, deleteDoc, getDocs } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+        import { getFirestore, collection, onSnapshot, doc, addDoc, updateDoc, deleteDoc, getDocs, writeBatch } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
         // ▼▼▼▼▼ ここにあなたのFirebase設定を貼り付けてください ▼▼▼▼▼
         const firebaseConfig = {
@@ -123,11 +118,16 @@
           appId: "G-F1Y6RVYRDF"
         };
         // ▲▲▲▲▲ ここまで ▲▲▲▲▲
+
+        // Firebaseの初期化
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const questionsCollection = collection(db, 'questions');
         
         // ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
         // ★★★ 初回起動時にデータベースへ投入する初期データ ★★★
         // ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
-        const initialQuestions = [
+       const initialQuestions = [
             { "id": 1, "category": 1, "question": "気管支と細気管支を組織学的に鑑別する最も重要な構造物は何か？", "answer": "<strong>答え:</strong> 軟骨<br><strong>解説:</strong> 気管支には軟骨が敷石状に存在しますが、細気管支には軟骨が存在しません。" },
             { "id": 2, "category": 1, "question": "細気管支において、杯細胞に代わって見られる分泌細胞は何か？", "answer": "<strong>答え:</strong> クララ細胞（クラブ細胞）<br><strong>解説:</strong> 細気管支では粘液を産生する杯細胞がなくなり、サーファクタントの成分などを分泌するクララ細胞に置き換わります。" },
             { "id": 3, "category": 1, "question": "右気管支動脈の最も多い起始はどこか？", "answer": "<strong>答え:</strong> 肋間動脈<br><strong>解説:</strong> 右気管支動脈は肋間動脈から、左気管支動脈は胸部大動脈から起始することが最も多いとされています。" },
@@ -411,11 +411,12 @@
             { "id": 281, "question": "末梢型の深部静脈血栓症（DVT）はどのような場合に経過観察が選択されますか？", "answer": "回答: 無症候性で低リスク、かつ2週間以内に中枢側への進展が見られない場合。 <br> 解説: 2週間進展がなければ、その後の進展リスクは低いとされています。", "category": 8 }
         ];
 
+
         // --- アプリケーションのロジック ---
-        let questions = [];
+        let allQuestions = []; // Firestoreから取得した全問題
+        let filteredQuestions = []; // 表示対象の問題
         let currentQuestionIndex = 0;
-        let filteredQuestions = [];
-        let weaknessList = [];
+        let weaknessList = []; // 苦手リストは引き続きローカルストレージで管理
 
         const categories = {
             1: '形態・生理・疫学', 2: '診察・検査', 3: '感染症', 4: '閉塞性肺疾患・アレルギー', 
@@ -452,31 +453,61 @@
 
         // --- 初期化 ---
         function init() {
-            loadQuestions();
+            setupFirestoreListener();
             loadWeaknessList();
             createCategoryButtons();
             populateCategorySelect();
             addEventListeners();
-            updateDisplay();
         }
 
-        // --- データ管理 (localStorage) ---
-        function loadQuestions() {
-            const savedQuestions = localStorage.getItem('respiratoryQuestions');
-            if (savedQuestions) {
-                questions = JSON.parse(savedQuestions);
-            } else {
-                questions = initialQuestions.map((q, index) => ({...q, id: index + 1}));
+        // --- Firestoreとの連携 ---
+        function setupFirestoreListener() {
+            onSnapshot(questionsCollection, (snapshot) => {
+                if (snapshot.empty) {
+                    elements.totalQuestionsDisplay.textContent = "初期データを投入中...";
+                    populateInitialData();
+                    return;
+                }
+                
+                allQuestions = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                allQuestions.sort((a, b) => a.question.localeCompare(b.question)); // 読み込み順を安定させるためにソート
+
+                elements.totalQuestionsDisplay.textContent = `全${allQuestions.length}問 - 知識の定着にご活用ください`;
+                enableControls();
+                
+                // 現在のフィルターを維持したまま表示を更新
+                const activeCategory = document.querySelector('.category-btn.active')?.dataset.category || 'all';
+                handleFilter(activeCategory);
+
+            }, (error) => {
+                console.error("Firestoreからのデータ読み込みに失敗しました:", error);
+                elements.totalQuestionsDisplay.textContent = "データベース接続エラー";
+            });
+        }
+
+        async function populateInitialData() {
+            try {
+                const batch = writeBatch(db);
+                initialQuestions.forEach(q => {
+                    const docRef = doc(collection(db, 'questions'));
+                    batch.set(docRef, q);
+                });
+                await batch.commit();
+                console.log("初期データの投入が完了しました。");
+            } catch (error) {
+                console.error("初期データの投入に失敗しました:", error);
             }
-            filteredQuestions = [...questions];
-            saveQuestions();
         }
 
-        function saveQuestions() {
-            localStorage.setItem('respiratoryQuestions', JSON.stringify(questions));
-            elements.totalQuestionsDisplay.textContent = `全${questions.length}問 - 知識の定着にご活用ください`;
+        function enableControls() {
+            elements.searchInput.disabled = false;
+            elements.addBtn.disabled = false;
+            elements.editBtn.disabled = false;
+            elements.deleteBtn.disabled = false;
+            elements.exportBtn.disabled = false;
         }
 
+        // --- データ管理 (localStorage for weakness list) ---
         function loadWeaknessList() {
             const savedList = localStorage.getItem('respiratoryWeaknessList');
             weaknessList = savedList ? JSON.parse(savedList) : [];
@@ -485,7 +516,7 @@
         function saveWeaknessList() {
             localStorage.setItem('respiratoryWeaknessList', JSON.stringify(weaknessList));
         }
-
+        
         // --- UI生成 ---
         function createCategoryButtons() {
             let buttonsHTML = `<button class="category-btn active px-3 py-1 text-sm rounded-full bg-gray-200 hover:bg-gray-300 transition" data-category="all">すべて</button>`;
@@ -547,7 +578,7 @@
             }
 
             setTimeout(() => {
-                elements.cardFront.innerHTML = `<p class="text-gray-500 text-sm mb-4">Q${questionData.id}</p><p class="text-lg md:text-xl font-semibold">${questionData.question}</p>`;
+                elements.cardFront.innerHTML = `<p class="text-gray-500 text-sm mb-4">Category: ${categories[questionData.category]}</p><p class="text-lg md:text-xl font-semibold">${questionData.question}</p>`;
                 elements.cardBack.innerHTML = `<div class="text-left w-full">${questionData.answer}</div>`;
                 elements.progressEl.textContent = `問題 ${currentQuestionIndex + 1} / ${filteredQuestions.length}`;
                 updateWeaknessButtonState(questionData.id);
@@ -603,7 +634,7 @@
         }
 
         function filterQuestions(category, searchTerm = '') {
-            let tempQuestions = [...questions];
+            let tempQuestions = [...allQuestions];
             if (category === 'weak') {
                 tempQuestions = tempQuestions.filter(q => weaknessList.includes(q.id));
             } else if (category !== 'all') {
@@ -678,75 +709,90 @@
             openModal('edit', questionData);
         }
 
-        function handleDeleteQuestion() {
+        async function handleDeleteQuestion() {
             if (filteredQuestions.length === 0) return;
             const questionToDelete = filteredQuestions[currentQuestionIndex];
-            if (confirm(`問題ID: ${questionToDelete.id}「${questionToDelete.question.substring(0, 20)}...」を本当に削除しますか？`)) {
-                questions = questions.filter(q => q.id !== questionToDelete.id);
-                const weakIndex = weaknessList.indexOf(questionToDelete.id);
-                if (weakIndex > -1) weaknessList.splice(weakIndex, 1);
-                
-                saveQuestions();
-                saveWeaknessList();
-                handleFilter(document.querySelector('.category-btn.active').dataset.category);
+            if (confirm(`問題「${questionToDelete.question.substring(0, 20)}...」を本当に削除しますか？`)) {
+                try {
+                    await deleteDoc(doc(db, 'questions', questionToDelete.id));
+                    
+                    // 苦手リストからも削除
+                    const weakIndex = weaknessList.indexOf(questionToDelete.id);
+                    if (weakIndex > -1) {
+                        weaknessList.splice(weakIndex, 1);
+                        saveWeaknessList();
+                    }
+                    alert('問題を削除しました。');
+                    // onSnapshotが自動でUIを更新します
+                } catch (error) {
+                    console.error("削除中にエラーが発生しました:", error);
+                    alert('問題の削除に失敗しました。');
+                }
             }
         }
 
-        function handleSaveQuestion(e) {
+        async function handleSaveQuestion(e) {
             e.preventDefault();
-            const id = parseInt(elements.modalQuestionId.value);
-            const newQuestionData = {
+            const id = elements.modalQuestionId.value;
+            const questionData = {
                 question: elements.modalQuestion.value,
                 answer: elements.modalAnswer.value,
                 category: parseInt(elements.modalCategory.value)
             };
 
-            if (id) {
-                const index = questions.findIndex(q => q.id === id);
-                if (index > -1) {
-                    questions[index] = { ...questions[index], ...newQuestionData };
+            try {
+                if (id) { // 更新
+                    const docRef = doc(db, 'questions', id);
+                    await updateDoc(docRef, questionData);
+                    alert('問題を更新しました。');
+                } else { // 新規追加
+                    await addDoc(questionsCollection, questionData);
+                    alert('問題を追加しました。');
                 }
-            } else {
-                const newId = questions.length > 0 ? Math.max(...questions.map(q => q.id)) + 1 : 1;
-                questions.push({ id: newId, ...newQuestionData });
+                closeModal();
+                // onSnapshotが自動でUIを更新します
+            } catch (error) {
+                console.error("保存中にエラーが発生しました:", error);
+                alert('問題の保存に失敗しました。');
             }
-            
-            saveQuestions();
-            closeModal();
-            handleFilter(document.querySelector('.category-btn.active').dataset.category);
-            const targetId = id || (questions.length > 0 ? questions[questions.length - 1].id : 1);
-            const newIndexInFiltered = filteredQuestions.findIndex(q => q.id === targetId);
-            if(newIndexInFiltered > -1) {
-              currentQuestionIndex = newIndexInFiltered;
-            } else {
-              document.querySelectorAll('.category-btn').forEach(btn => btn.classList.remove('active'));
-              document.querySelector('.category-btn[data-category="all"]').classList.add('active');
-              handleFilter('all');
-              const newIndexInAll = filteredQuestions.findIndex(q => q.id === targetId);
-              if (newIndexInAll > -1) currentQuestionIndex = newIndexInAll;
-            }
-            updateDisplay();
         }
 
-        // --- ★★★ HTMLエクスポート機能 ★★★ ---
-        function exportHTML() {
-            const currentQuestionsString = JSON.stringify(questions, null, 4);
+        // --- HTMLエクスポート機能 ---
+        async function exportHTML() {
+            try {
+                const snapshot = await getDocs(questionsCollection);
+                const allDocs = snapshot.docs.map(doc => {
+                    const data = doc.data();
+                    // FirestoreのIDはエクスポートしない
+                    return {
+                        category: data.category,
+                        question: data.question,
+                        answer: data.answer
+                    };
+                });
+                
+                const currentQuestionsString = JSON.stringify(allDocs, null, 4);
             
-            // 現在のHTMLを取得し、スクリプト部分を新しいデータで置き換える
-            const pageHTML = document.documentElement.outerHTML;
-            const scriptRegex = /const initialQuestions = \[[\s\S]*?\];/;
-            const newScriptContent = `const initialQuestions = ${currentQuestionsString};`;
-            const newPageHTML = pageHTML.replace(scriptRegex, newScriptContent);
+                const pageHTML = document.documentElement.outerHTML;
+                const scriptRegex = /const initialQuestions = \[[\s\S]*?\];/;
+                // 注意: エクスポートされるデータには、元のinitialQuestionsに含まれていたIDは含まれません。
+                const newScriptContent = `const initialQuestions = ${currentQuestionsString};`;
+                const newPageHTML = pageHTML.replace(scriptRegex, newScriptContent);
 
-            const blob = new Blob([newPageHTML], { type: 'text/html' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = 'flashcard-app-updated.html';
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
+                const blob = new Blob([newPageHTML], { type: 'text/html' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'flashcard-app-updated.html';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+
+            } catch (error) {
+                console.error("エクスポートデータの取得に失敗しました:", error);
+                alert('エクスポートに失敗しました。');
+            }
         }
 
         // --- アプリケーション開始 ---
@@ -754,4 +800,3 @@
     </script>
 </body>
 </html>
-
