@@ -468,7 +468,7 @@ const initialQuestions = [
                     return;
                 }
                 
-                allQuestions = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                allQuestions = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
                 allQuestions.sort((a, b) => a.question.localeCompare(b.question)); // 読み込み順を安定させるためにソート
 
                 elements.totalQuestionsDisplay.textContent = `全${allQuestions.length}問 - 知識の定着にご活用ください`;
