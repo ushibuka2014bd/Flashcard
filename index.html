@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>呼吸器専門医試験対策 フラッシュカード</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', 'Noto Sans JP', sans-serif;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+        .flashcard-container { perspective: 1000px; }
+        .flashcard { width: 100%; height: 100%; position: relative; transform-style: preserve-3d; transition: transform 0.6s; }
+        .flashcard.is-flipped { transform: rotateY(180deg); }
+        .flashcard-face { position: absolute; width: 100%; height: 100%; backface-visibility: hidden; -webkit-backface-visibility: hidden; display: flex; flex-direction: column; justify-content: center; align-items: center; overflow-y: auto; }
+        .flashcard-back { transform: rotateY(180deg); }
+        .flashcard-face::-webkit-scrollbar { width: 8px; }
+        .flashcard-face::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 10px; }
+        .flashcard-face::-webkit-scrollbar-thumb { background: #888; border-radius: 10px; }
+        .flashcard-face::-webkit-scrollbar-thumb:hover { background: #555; }
+        .category-btn.active { background-color: #3b82f6; color: white; font-weight: 600; }
+        #weakness-btn.active svg { fill: #facc15; color: #facc15; }
+        .modal { display: none; }
+        .modal.is-open { display: flex; }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800">
+
+    <div class="container mx-auto p-4 md:p-8 max-w-4xl">
+        <header class="text-center mb-6">
+            <h1 class="text-2xl md:text-3xl font-bold text-gray-700">【Firebase対応】呼吸器専門医試験対策</h1>
+            <p id="total-questions-display" class="text-gray-500 mt-1">知識の定着にご活用ください</p>
+        </header>
+
+        <div class="bg-white p-4 rounded-xl shadow-md mb-6">
+            <div class="mb-4">
+                <input type="text" id="search" placeholder="キーワードで問題を検索..." class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition">
+            </div>
+            <div>
+                <h3 class="text-sm font-semibold mb-2 text-gray-600">カテゴリで絞り込み:</h3>
+                <div id="category-filters" class="flex flex-wrap gap-2"></div>
+            </div>
+        </div>
+
+        <main class="mb-6">
+            <div class="flex justify-between items-center mb-4">
+                <div id="progress" class="text-lg font-semibold text-gray-600"></div>
+                
+                <div class="flex items-center gap-2">
+                    <input type="number" id="jump-input" class="w-20 rounded-md border-gray-300 shadow-sm" placeholder="番号">
+                    <button id="jump-btn" class="px-3 py-1 bg-gray-200 rounded-md text-sm hover:bg-gray-300 transition">移動</button>
+                </div>
+
+                <button id="weakness-btn" class="text-gray-400 hover:text-yellow-400 transition-colors text-2xl" title="苦手リストに追加/削除">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"></path></svg>
+                </button>
+            </div>
+            <div class="flashcard-container h-80 md:h-96">
+                <div id="flashcard" class="flashcard">
+                    <div id="card-front" class="flashcard-face bg-white rounded-xl shadow-lg p-6 border-2 border-blue-200"></div>
+                    <div id="card-back" class="flashcard-face flashcard-back bg-blue-50 rounded-xl shadow-lg p-6 border-2 border-blue-300"></div>
+                </div>
+            </div>
+        </main>
+
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+            <button id="prev-btn" class="w-full bg-white text-blue-600 font-semibold py-3 px-4 rounded-lg shadow hover:bg-gray-50 transition-colors border border-gray-200">前の問題</button>
+            <button id="random-btn" class="w-full bg-white text-blue-600 font-semibold py-3 px-4 rounded-lg shadow hover:bg-gray-50 transition-colors border border-gray-200">ランダム</button>
+            <button id="flip-btn" class="w-full bg-blue-500 text-white font-semibold py-3 px-4 rounded-lg shadow hover:bg-blue-600 transition-colors col-span-2 md:col-span-1">答えを見る</button>
+            <button id="next-btn" class="w-full bg-blue-500 text-white font-semibold py-3 px-4 rounded-lg shadow hover:bg-blue-600 transition-colors col-span-2 md:col-span-1">次の問題</button>
+        </div>
+
+        <div class="bg-white p-4 rounded-xl shadow-md">
+            <h3 class="text-lg font-bold text-gray-700 mb-4 text-center">問題の管理</h3>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <button id="add-btn" class="w-full bg-green-500 text-white font-semibold py-3 px-4 rounded-lg shadow hover:bg-green-600 transition-colors">新しい問題を追加</button>
+                <button id="edit-btn" class="w-full bg-yellow-500 text-white font-semibold py-3 px-4 rounded-lg shadow hover:bg-yellow-600 transition-colors">この問題を修正</button>
+                <button id="delete-btn" class="w-full bg-red-500 text-white font-semibold py-3 px-4 rounded-lg shadow hover:bg-red-600 transition-colors">この問題を削除</button>
+                <button id="export-btn" class="w-full bg-purple-500 text-white font-semibold py-3 px-4 rounded-lg shadow hover:bg-purple-600 transition-colors">HTMLをエクスポート</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="edit-modal" class="modal fixed inset-0 bg-black bg-opacity-50 items-center justify-center p-4 z-50">
+        <div class="bg-white rounded-xl shadow-2xl p-6 w-full max-w-lg">
+            <h2 id="modal-title" class="text-2xl font-bold mb-4"></h2>
+            <form id="edit-form">
+                <input type="hidden" id="modal-question-id" value="">
+                <div class="mb-4">
+                    <label for="modal-question" class="block text-sm font-medium text-gray-700 mb-1">問題文</label>
+                    <textarea id="modal-question" rows="4" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" required></textarea>
+                </div>
+                <div class="mb-4">
+                    <label for="modal-answer" class="block text-sm font-medium text-gray-700 mb-1">答えと解説 (HTMLタグが使えます)</label>
+                    <textarea id="modal-answer" rows="6" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" required></textarea>
+                </div>
+                <div class="mb-6">
+                    <label for="modal-category" class="block text-sm font-medium text-gray-700 mb-1">カテゴリ</label>
+                    <select id="modal-category" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" required></select>
+                </div>
+                <div class="flex justify-end gap-4">
+                    <button type="button" id="modal-cancel-btn" class="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300">キャンセル</button>
+                    <button type="submit" id="modal-save-btn" class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600">保存</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script type="module">
+        // Firebase SDKのインポート
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+        import { getFirestore, collection, onSnapshot, doc, addDoc, updateDoc, deleteDoc, getDocs, writeBatch, query, orderBy } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+        // ▼▼▼▼▼ Firebaseコンソールからコピーするのは、このfirebaseConfigの中身だけです ▼▼▼▼▼
+        const firebaseConfig = {
+          apiKey: "AIzaSyDkaIgO-EzjjRteHNefpNOJDWBgkVvDf5Y",
+          authDomain: "flashcard-54f81.firebaseapp.com",
+          projectId: "flashcard-54f81",
+          storageBucket: "flashcard-54f81.firebasestorage.app",
+          messagingSenderId: "120004007269",
+          appId: "1:120004007269:web:3c8d5209ce33a1cb23bd8c",
+          measurementId: "G-F1Y6RVYRDF"
+        };
+        // ▲▲▲▲▲ ここまで ▲▲▲▲▲
+
+        // Firebaseの初期化
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const questionsCollection = collection(db, 'questions');
+        
+        const initialQuestions = [
+            /* ==============================================================
+               ここに、orderIndex を追加したすべての問題データを貼り付けてください 
+               ==============================================================
+            */
+        ];
+        
+        // --- アプリケーションのロジック ---
+        let allQuestions = [];
+        let filteredQuestions = [];
+        let currentQuestionIndex = 0;
+        let weaknessList = [];
+
+        const categories = {
+            1: '形態・生理・疫学', 2: '診察・検査', 3: '感染症', 4: '閉塞性肺疾患・アレルギー', 
+            5: '間質性肺疾患・希少疾患', 6: '腫瘍', 7: '呼吸不全・その他', 8: '肺血管疾患'
+        };
+
+        const elements = {
+            flashcard: document.getElementById('flashcard'),
+            cardFront: document.getElementById('card-front'),
+            cardBack: document.getElementById('card-back'),
+            prevBtn: document.getElementById('prev-btn'),
+            nextBtn: document.getElementById('next-btn'),
+            flipBtn: document.getElementById('flip-btn'),
+            randomBtn: document.getElementById('random-btn'),
+            progressEl: document.getElementById('progress'),
+            categoryFiltersEl: document.getElementById('category-filters'),
+            searchInput: document.getElementById('search'),
+            weaknessBtn: document.getElementById('weakness-btn'),
+            addBtn: document.getElementById('add-btn'),
+            editBtn: document.getElementById('edit-btn'),
+            deleteBtn: document.getElementById('delete-btn'),
+            exportBtn: document.getElementById('export-btn'),
+            modal: document.getElementById('edit-modal'),
+            modalTitle: document.getElementById('modal-title'),
+            modalCancelBtn: document.getElementById('modal-cancel-btn'),
+            editForm: document.getElementById('edit-form'),
+            modalQuestionId: document.getElementById('modal-question-id'),
+            modalQuestion: document.getElementById('modal-question'),
+            modalAnswer: document.getElementById('modal-answer'),
+            modalCategory: document.getElementById('modal-category'),
+            totalQuestionsDisplay: document.getElementById('total-questions-display'),
+            jumpInput: document.getElementById('jump-input'),
+            jumpBtn: document.getElementById('jump-btn')
+        };
+
+        function init() {
+            setupFirestoreListener();
+            loadWeaknessList();
+            createCategoryButtons();
+            populateCategorySelect();
+            addEventListeners();
+        }
+
+        function setupFirestoreListener() {
+            const q = query(questionsCollection, orderBy("orderIndex")); 
+
+            onSnapshot(q, (snapshot) => {
+                if (snapshot.empty && initialQuestions.length > 0) {
+                    elements.totalQuestionsDisplay.textContent = "初期データを投入中...";
+                    populateInitialData();
+                    return;
+                }
+                
+                allQuestions = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+
+                elements.totalQuestionsDisplay.textContent = `全${allQuestions.length}問 - 知識の定着にご活用ください`;
+                elements.searchInput.disabled = false;
+                
+                const activeCategory = document.querySelector('.category-btn.active')?.dataset.category || 'all';
+                handleFilter(activeCategory);
+
+            }, (error) => {
+                console.error("Firestoreからのデータ読み込みに失敗しました:", error);
+                elements.totalQuestionsDisplay.textContent = "データベース接続エラー";
+            });
+        }
+
+        async function populateInitialData() {
+            try {
+                const batch = writeBatch(db);
+                initialQuestions.forEach(q => {
+                    const docRef = doc(questionsCollection);
+                    batch.set(docRef, q);
+                });
+                await batch.commit();
+                console.log("初期データの投入が完了しました。");
+            } catch (error) {
+                console.error("初期データの投入に失敗しました:", error);
+            }
+        }
+
+        function loadWeaknessList() {
+            const savedList = localStorage.getItem('respiratoryWeaknessList');
+            weaknessList = savedList ? JSON.parse(savedList) : [];
+        }
+
+        function saveWeaknessList() {
+            localStorage.setItem('respiratoryWeaknessList', JSON.stringify(weaknessList));
+        }
+        
+        function createCategoryButtons() {
+            let buttonsHTML = `<button class="category-btn active px-3 py-1 text-sm rounded-full bg-gray-200 hover:bg-gray-300 transition" data-category="all">すべて</button>`;
+            buttonsHTML += `<button class="category-btn px-3 py-1 text-sm rounded-full bg-gray-200 hover:bg-gray-300 transition" data-category="weak">苦手リスト</button>`;
+            Object.entries(categories).forEach(([id, name]) => {
+                buttonsHTML += `<button class="category-btn px-3 py-1 text-sm rounded-full bg-gray-200 hover:bg-gray-300 transition" data-category="${id}">${name}</button>`;
+            });
+            elements.categoryFiltersEl.innerHTML = buttonsHTML;
+        }
+
+        function populateCategorySelect() {
+            let optionsHTML = '';
+            Object.entries(categories).forEach(([id, name]) => {
+                optionsHTML += `<option value="${id}">${name}</option>`;
+            });
+            elements.modalCategory.innerHTML = optionsHTML;
+        }
+
+        function addEventListeners() {
+            elements.prevBtn.addEventListener('click', showPrevQuestion);
+            elements.nextBtn.addEventListener('click', showNextQuestion);
+            elements.flipBtn.addEventListener('click', flipCard);
+            elements.flashcard.addEventListener('click', flipCard);
+            elements.randomBtn.addEventListener('click', showRandomQuestion);
+            elements.searchInput.addEventListener('input', handleSearch);
+            elements.weaknessBtn.addEventListener('click', toggleWeakness);
+            elements.addBtn.addEventListener('click', handleAddQuestion);
+            elements.editBtn.addEventListener('click', handleEditQuestion);
+            elements.deleteBtn.addEventListener('click', handleDeleteQuestion);
+            elements.exportBtn.addEventListener('click', exportHTML);
+            elements.modalCancelBtn.addEventListener('click', closeModal);
+            elements.editForm.addEventListener('submit', handleSaveQuestion);
+            
+            elements.categoryFiltersEl.addEventListener('click', (e) => {
+                if (e.target.classList.contains('category-btn')) {
+                    const category = e.target.dataset.category;
+                    handleFilter(category);
+                    document.querySelectorAll('.category-btn').forEach(btn => btn.classList.remove('active'));
+                    e.target.classList.add('active');
+                }
+            });
+
+            elements.jumpBtn.addEventListener('click', jumpToQuestion);
+            elements.jumpInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    jumpToQuestion();
+                }
+            });
+        }
+
+        function jumpToQuestion() {
+            const targetOrderIndex = parseInt(elements.jumpInput.value, 10);
+            if (!isNaN(targetOrderIndex)) {
+                const targetArrayIndex = filteredQuestions.findIndex(q => q.orderIndex === targetOrderIndex);
+
+                if (targetArrayIndex !== -1) {
+                    currentQuestionIndex = targetArrayIndex;
+                    updateDisplay();
+                } else {
+                    alert('現在のフィルタ条件では、その番号の問題は見つかりませんでした。');
+                }
+            }
+            elements.jumpInput.value = '';
+        }
+
+        function updateDisplay() {
+            if (filteredQuestions.length === 0) {
+                displayNoResults();
+                return;
+            }
+            if (currentQuestionIndex >= filteredQuestions.length) currentQuestionIndex = 0;
+            if (currentQuestionIndex < 0) currentQuestionIndex = filteredQuestions.length - 1;
+
+            const questionData = filteredQuestions[currentQuestionIndex];
+            
+            if (elements.flashcard.classList.contains('is-flipped')) {
+                elements.flashcard.classList.remove('is-flipped');
+                elements.flipBtn.textContent = '答えを見る';
+            }
+
+            setTimeout(() => {
+                elements.cardFront.innerHTML = `<p class="text-gray-500 text-sm mb-4">Category: ${categories[questionData.category]}</p><p class="text-lg md:text-xl font-semibold">${questionData.question}</p>`;
+                elements.cardBack.innerHTML = `<div class="text-left w-full">${questionData.answer}</div>`;
+                elements.progressEl.textContent = `問題 ${questionData.orderIndex} / ${allQuestions.length}`;
+                updateWeaknessButtonState(questionData.id);
+            }, 150);
+        }
+
+        function displayNoResults() {
+            elements.cardFront.innerHTML = `<p class="text-lg font-semibold text-gray-500">該当する問題がありません。</p>`;
+            elements.cardBack.innerHTML = '';
+            elements.progressEl.textContent = `問題 0 / 0`;
+            elements.weaknessBtn.classList.remove('active');
+            elements.weaknessBtn.querySelector('svg').setAttribute('fill', 'none');
+        }
+
+        function flipCard() {
+            if (filteredQuestions.length === 0) return;
+            elements.flashcard.classList.toggle('is-flipped');
+            elements.flipBtn.textContent = elements.flashcard.classList.contains('is-flipped') ? '問題に戻る' : '答えを見る';
+        }
+
+        function showNextQuestion() {
+            if (filteredQuestions.length === 0) return;
+            currentQuestionIndex = (currentQuestionIndex + 1) % filteredQuestions.length;
+            updateDisplay();
+        }
+
+        function showPrevQuestion() {
+            if (filteredQuestions.length === 0) return;
+            currentQuestionIndex = (currentQuestionIndex - 1 + filteredQuestions.length) % filteredQuestions.length;
+            updateDisplay();
+        }
+
+        function showRandomQuestion() {
+            if (filteredQuestions.length > 1) {
+                let newIndex;
+                do {
+                    newIndex = Math.floor(Math.random() * filteredQuestions.length);
+                } while (newIndex === currentQuestionIndex);
+                currentQuestionIndex = newIndex;
+                updateDisplay();
+            }
+        }
+
+        function handleSearch(e) {
+            const searchTerm = e.target.value.toLowerCase();
+            filterQuestions(document.querySelector('.category-btn.active').dataset.category, searchTerm);
+        }
+        
+        function handleFilter(category) {
+            const searchTerm = elements.searchInput.value.toLowerCase();
+            filterQuestions(category, searchTerm);
+        }
+
+        function filterQuestions(category, searchTerm = '') {
+            let tempQuestions = [...allQuestions];
+            if (category === 'weak') {
+                const weaknessDocIds = weaknessList.map(w => w.docId);
+                tempQuestions = tempQuestions.filter(q => weaknessDocIds.includes(q.id));
+            } else if (category !== 'all') {
+                tempQuestions = tempQuestions.filter(q => q.category == category);
+            }
+            if (searchTerm) {
+                tempQuestions = tempQuestions.filter(q => 
+                    q.question.toLowerCase().includes(searchTerm) || 
+                    q.answer.toLowerCase().includes(searchTerm)
+                );
+            }
+            filteredQuestions = tempQuestions;
+            currentQuestionIndex = 0;
+            updateDisplay();
+        }
+
+        function toggleWeakness() {
+            if (filteredQuestions.length === 0) return;
+            const questionId = filteredQuestions[currentQuestionIndex].id;
+            const index = weaknessList.indexOf(questionId);
+            if (index > -1) {
+                weaknessList.splice(index, 1);
+            } else {
+                weaknessList.push(questionId);
+            }
+            saveWeaknessList();
+            updateWeaknessButtonState(questionId);
+            if (document.querySelector('.category-btn.active').dataset.category === 'weak') {
+                handleFilter('weak');
+            }
+        }
+
+        function updateWeaknessButtonState(questionId) {
+            const svg = elements.weaknessBtn.querySelector('svg');
+            if (weaknessList.includes(questionId)) {
+                elements.weaknessBtn.classList.add('active');
+                svg.setAttribute('fill', '#facc15');
+            } else {
+                elements.weaknessBtn.classList.remove('active');
+                svg.setAttribute('fill', 'none');
+            }
+        }
+
+        function openModal(mode, questionData = null) {
+            elements.editForm.reset();
+            elements.modalQuestionId.value = '';
+            if (mode === 'add') {
+                elements.modalTitle.textContent = '新しい問題を追加';
+            } else {
+                if (!questionData) return;
+                elements.modalTitle.textContent = '問題を修正';
+                elements.modalQuestionId.value = questionData.id;
+                elements.modalQuestion.value = questionData.question;
+                elements.modalAnswer.value = questionData.answer;
+                elements.modalCategory.value = questionData.category;
+            }
+            elements.modal.classList.add('is-open');
+        }
+
+        function closeModal() {
+            elements.modal.classList.remove('is-open');
+        }
+
+        function handleAddQuestion() {
+            openModal('add');
+        }
+
+        function handleEditQuestion() {
+            if (filteredQuestions.length === 0) return;
+            const questionData = filteredQuestions[currentQuestionIndex];
+            openModal('edit', questionData);
+        }
+
+        async function handleDeleteQuestion() {
+            if (filteredQuestions.length === 0) return;
+            const questionToDelete = filteredQuestions[currentQuestionIndex];
+            if (confirm(`問題「${questionToDelete.question.substring(0, 20)}...」を本当に削除しますか？`)) {
+                try {
+                    await deleteDoc(doc(db, 'questions', questionToDelete.id));
+                    
+                    const weakIndex = weaknessList.indexOf(questionToDelete.id);
+                    if (weakIndex > -1) {
+                        weaknessList.splice(weakIndex, 1);
+                        saveWeaknessList();
+                    }
+                    alert('問題を削除しました。');
+                } catch (error) {
+                    console.error("削除中にエラーが発生しました:", error);
+                    alert('問題の削除に失敗しました。');
+                }
+            }
+        }
+
+        async function handleSaveQuestion(e) {
+            e.preventDefault();
+            const id = elements.modalQuestionId.value;
+            const questionData = {
+                question: elements.modalQuestion.value,
+                answer: elements.modalAnswer.value,
+                category: parseInt(elements.modalCategory.value)
+            };
+
+            try {
+                if (id) {
+                    const docRef = doc(db, 'questions', id);
+                    await updateDoc(docRef, questionData);
+                    alert('問題を更新しました。');
+                } else {
+                    const lastQuestion = allQuestions.length > 0 ? allQuestions[allQuestions.length - 1] : null;
+                    const newIndex = lastQuestion ? lastQuestion.orderIndex + 1 : 1;
+                    questionData.orderIndex = newIndex;
+                    
+                    await addDoc(questionsCollection, questionData);
+                    alert('問題を追加しました。');
+                }
+                closeModal();
+            } catch (error) {
+                console.error("保存中にエラーが発生しました:", error);
+                alert('問題の保存に失敗しました。');
+            }
+        }
+
+        async function exportHTML() {
+            try {
+                const snapshot = await getDocs(query(questionsCollection, orderBy("orderIndex")));
+                const allDocsData = snapshot.docs.map(doc => doc.data());
+                
+                const exportDataString = JSON.stringify(allDocsData, null, 4);
+
+                const pageHTML = document.documentElement.outerHTML;
+                const scriptRegex = /const initialQuestions = \[[\s\S]*?\];/;
+                
+                const indentedDataString = exportDataString.split('\n').map((line, index) => {
+                    return index > 0 ? '            ' + line : line;
+                }).join('\n');
+
+                const newScriptContent = `const initialQuestions = ${indentedDataString};`;
+                
+                const newPageHTML = pageHTML.replace(scriptRegex, newScriptContent);
+                
+                const blob = new Blob([newPageHTML], { type: 'text/html;charset=utf-8' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                
+                const now = new Date();
+                const timestamp = `${now.getFullYear()}${(now.getMonth() + 1).toString().padStart(2, '0')}${now.getDate().toString().padStart(2, '0')}`;
+                a.download = `flashcard_backup_${timestamp}.html`;
+                
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+
+            } catch (error) {
+                console.error("エクスポートに失敗しました:", error);
+                alert('エクスポートに失敗しました。');
+            }
+        }
+        
+        init();
+    </script>
+
+</body>
+</html>
