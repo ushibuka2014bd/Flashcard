@@ -3665,51 +3665,55 @@
             }
         }
 
-        async function exportHTML() {
-            try {
-                const snapshot = await getDocs(query(questionsCollection, orderBy("orderIndex")));
-                const allDocsData = snapshot.docs.map(doc => doc.data());
-                
-                const exportDataString = JSON.stringify(allDocsData, null, 4);
+       // ▼▼▼ exportHTML関数をまるごとこれに置き換えてください ▼▼▼
+async function exportHTML() {
+    try {
+        // FirestoreからorderIndex順で全データを取得
+        const snapshot = await getDocs(query(questionsCollection, orderBy("orderIndex")));
+        const allDocsData = snapshot.docs.map(doc => doc.data());
+        
+        // 取得したデータをJSON文字列に変換
+        const exportDataString = JSON.stringify(allDocsData, null, 4);
 
-                const pageHTML = document.documentElement.outerHTML;
-                const scriptRegex = /const initialQuestions = \[[\s\S]*?\];/;
-                
-                // 配列のインデントを調整
-                const indentedDataString = exportDataString.split('\n').map((line, index) => {
-                    return index > 0 ? '            ' + line : line;
-                }).join('\n');
+        // 現在のページのHTMLを取得
+        const pageHTML = document.documentElement.outerHTML;
 
-                const newScriptContent = `const initialQuestions = ${indentedDataString};`;
-                
-                let newPageHTML = pageHTML.replace(scriptRegex, newScriptContent);
-                
-                // Firebase Config以外のscriptタグを削除して軽量化
-                const bodyEnd = newPageHTML.lastIndexOf('</body>');
-                const scriptStart = newPageHTML.indexOf('<script type="module">');
-                if (scriptStart !== -1 && bodyEnd !== -1) {
-                    newPageHTML = newPageHTML.substring(0, scriptStart) + newPageHTML.substring(bodyEnd);
-                }
+        // initialQuestions配列を見つけるための正規表現
+        const scriptRegex = /const initialQuestions = \[[\s\S]*?\];/;
+        
+        // エクスポート用にインデントを調整
+        const indentedDataString = exportDataString.split('\n').map((line, index) => {
+            return index > 0 ? '            ' + line : line;
+        }).join('\n');
 
-                const blob = new Blob([newPageHTML], { type: 'text/html;charset=utf-8' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                
-                const now = new Date();
-                const timestamp = `${now.getFullYear()}${(now.getMonth() + 1).toString().padStart(2, '0')}${now.getDate().toString().padStart(2, '0')}`;
-                a.download = `flashcard_backup_${timestamp}.html`;
-                
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                URL.revokeObjectURL(url);
+        // 新しいscript部分のコンテンツを作成
+        const newScriptContent = `const initialQuestions = ${indentedDataString};`;
+        
+        // HTML内のinitialQuestions配列をFirestoreのデータで置き換え
+        const newPageHTML = pageHTML.replace(scriptRegex, newScriptContent);
+        
+        // --- ここにあった問題のコードを削除しました ---
 
-            } catch (error) {
-                console.error("エクスポートに失敗しました:", error);
-                alert('エクスポートに失敗しました。');
-            }
-        }
+        // Blobを作成してダウンロード
+        const blob = new Blob([newPageHTML], { type: 'text/html;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        
+        const now = new Date();
+        const timestamp = `${now.getFullYear()}${(now.getMonth() + 1).toString().padStart(2, '0')}${now.getDate().toString().padStart(2, '0')}`;
+        a.download = `flashcard_backup_${timestamp}.html`;
+        
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+    } catch (error) {
+        console.error("エクスポートに失敗しました:", error);
+        alert('エクスポートに失敗しました。');
+    }
+}
         
         init();
     </script>
